@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-class ConfessionCard extends StatelessWidget {
+class ConfessionCard extends StatefulWidget {
+  final String confessionId;
+  final String userId;
   final String username;
   final String timeAgo;
   final String location;
@@ -12,6 +16,8 @@ class ConfessionCard extends StatelessWidget {
 
   const ConfessionCard({
     super.key,
+    required this.confessionId,
+    required this.userId,
     required this.username,
     required this.timeAgo,
     required this.location,
@@ -22,13 +28,195 @@ class ConfessionCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    int totalReactions = 0;
-    List<String> reactionEmojis = [];
-    if (reactionCounts != null && reactionCounts!.isNotEmpty) {
-      totalReactions = reactionCounts!.values.fold(0, (a, b) => a + b);
-      reactionEmojis = reactionCounts!.keys.toList();
+  State<ConfessionCard> createState() => _ConfessionCardState();
+}
+
+class _ConfessionCardState extends State<ConfessionCard> {
+  OverlayEntry? _overlayEntry;
+
+  bool isLiked = false;
+  String? userReaction; // stores user's selected emoji
+  Map<String, int> currentReactions = {};
+
+  @override
+  void initState() {
+    super.initState();
+    currentReactions = Map<String, int>.from(widget.reactionCounts ?? {});
+  }
+
+  @override
+  void dispose() {
+    _submitReaction();
+    super.dispose();
+  }
+
+  Future<void> _submitReaction() async {
+    String? emoji;
+    if (isLiked) emoji = '👍';
+    if (userReaction != null) emoji = userReaction;
+
+    if (emoji != null) {
+      final url = Uri.parse(
+        'https://whisper-2nhg.onrender.com/api/confessions/react',
+      );
+      final body = {
+        'confessionId': widget.confessionId,
+        'userId': widget.userId,
+        'emoji': emoji,
+      };
+      try {
+        final response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        );
+        if (response.statusCode == 200) {
+          print('Reaction submitted successfully');
+        } else {
+          print('Failed to submit reaction: ${response.body}');
+        }
+      } catch (e) {
+        print('Error submitting reaction: $e');
+      }
     }
+  }
+
+  void _likeConfession() async {
+    _removeOverlay();
+
+    setState(() {
+      if (isLiked) {
+        // Unlike
+        String emoji = '👍';
+        if (currentReactions.containsKey(emoji)) {
+          currentReactions[emoji] = currentReactions[emoji]! - 1;
+          if (currentReactions[emoji] == 0) currentReactions.remove(emoji);
+        }
+        isLiked = false;
+      } else {
+        // If already reacted, remove reaction
+        if (userReaction != null) {
+          if (currentReactions.containsKey(userReaction!)) {
+            currentReactions[userReaction!] =
+                currentReactions[userReaction!]! - 1;
+            if (currentReactions[userReaction!] == 0)
+              currentReactions.remove(userReaction!);
+          }
+          userReaction = null;
+        }
+        // Like
+        String emoji = '👍';
+        currentReactions.update(emoji, (value) => value + 1, ifAbsent: () => 1);
+        isLiked = true;
+      }
+    });
+
+    await _submitReaction();
+  }
+
+  void _reactConfession(String emoji) async {
+    _removeOverlay();
+
+    setState(() {
+      if (userReaction == emoji) {
+        // Un-react
+        if (currentReactions.containsKey(emoji)) {
+          currentReactions[emoji] = currentReactions[emoji]! - 1;
+          if (currentReactions[emoji] == 0) currentReactions.remove(emoji);
+        }
+        userReaction = null;
+      } else {
+        // If already liked, unlike first
+        if (isLiked) {
+          String likeEmoji = '👍';
+          if (currentReactions.containsKey(likeEmoji)) {
+            currentReactions[likeEmoji] = currentReactions[likeEmoji]! - 1;
+            if (currentReactions[likeEmoji] == 0)
+              currentReactions.remove(likeEmoji);
+          }
+          isLiked = false;
+        }
+        // If had other reaction, remove it
+        if (userReaction != null && userReaction != emoji) {
+          if (currentReactions.containsKey(userReaction!)) {
+            currentReactions[userReaction!] =
+                currentReactions[userReaction!]! - 1;
+            if (currentReactions[userReaction!] == 0)
+              currentReactions.remove(userReaction!);
+          }
+        }
+        // Add new reaction
+        currentReactions.update(emoji, (value) => value + 1, ifAbsent: () => 1);
+        userReaction = emoji;
+      }
+    });
+
+    await _submitReaction();
+  }
+
+  void _showReactionOverlay(BuildContext context) {
+    final overlay = Overlay.of(context);
+    RenderBox box = context.findRenderObject() as RenderBox;
+    Offset position = box.localToGlobal(Offset.zero);
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: position.dy + box.size.height - 90,
+        left: position.dx + 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: ['👍', '👏', '🤝', '❤️', '💡', '😂'].map((emoji) {
+                  return GestureDetector(
+                    onTap: () => _reactConfession(emoji),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(_overlayEntry!);
+
+    // Auto dismiss after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      _removeOverlay();
+    });
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    int totalReactions = currentReactions.isNotEmpty
+        ? currentReactions.values.reduce((a, b) => a + b)
+        : 0;
+    List<String> reactionEmojis = currentReactions.keys.toList();
 
     return Container(
       width: double.infinity,
@@ -48,7 +236,7 @@ class ConfessionCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 22,
                   backgroundImage: NetworkImage(
-                    'https://i.pravatar.cc/150?u=$username',
+                    'https://i.pravatar.cc/150?u=${widget.username}',
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -57,12 +245,12 @@ class ConfessionCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        username,
+                        widget.username,
                         style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '$timeAgo • $location',
+                        '${widget.timeAgo} • ${widget.location}',
                         style: GoogleFonts.inter(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -80,13 +268,13 @@ class ConfessionCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
-              confession,
+              widget.confession,
               style: GoogleFonts.inter(fontSize: 14, color: Colors.black87),
             ),
           ),
 
           // Reaction + Comment row
-          if (reactionCounts != null && reactionCounts!.isNotEmpty)
+          if (currentReactions.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
@@ -117,7 +305,7 @@ class ConfessionCard extends StatelessWidget {
                   ),
                   const Spacer(),
                   Text(
-                    '$comments comments',
+                    '${widget.comments} comments',
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: Colors.grey[600],
@@ -135,7 +323,29 @@ class ConfessionCard extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildActionIcon(Icons.thumb_up_alt_outlined, 'Like'),
+                GestureDetector(
+                  onTap: _likeConfession,
+                  onLongPress: () => _showReactionOverlay(context),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isLiked
+                            ? Icons.thumb_up_alt
+                            : Icons.thumb_up_alt_outlined,
+                        size: 20,
+                        color: isLiked ? Colors.blue : Colors.grey[800],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Like',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: isLiked ? Colors.blue : Colors.grey[800],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 _buildActionIcon(Icons.chat_bubble_outline, 'Comment'),
                 _buildActionIcon(Icons.share_outlined, 'Share'),
                 _buildActionIcon(Icons.send_outlined, 'Send'),
@@ -148,7 +358,7 @@ class ConfessionCard extends StatelessWidget {
   }
 
   Widget _buildActionIcon(IconData icon, String label) {
-    return Column(
+    return Row(
       children: [
         Icon(icon, size: 20, color: Colors.grey[800]),
         const SizedBox(width: 4),

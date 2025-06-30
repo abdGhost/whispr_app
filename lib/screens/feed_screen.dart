@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:whispr_app/helper/format_timestamp.dart';
 import 'package:whispr_app/models/confession_model.dart';
 import '../api/api_services.dart';
@@ -17,11 +18,20 @@ class _FeedScreenState extends State<FeedScreen> {
   final List<String> _tabs = ['All', 'Funny', 'Sad', 'Love', 'Work', 'Other'];
 
   late Future<List<Confession>> _confessionsFuture;
+  String userId = '';
 
   @override
   void initState() {
     super.initState();
+    _loadUserId();
     _confessionsFuture = ApiServices().getAllConfession();
+  }
+
+  Future<void> _loadUserId() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      userId = prefs.getString('userId') ?? '';
+    });
   }
 
   void _onTabSelected(int index) {
@@ -113,17 +123,12 @@ class _FeedScreenState extends State<FeedScreen> {
                 } else {
                   final confessions = snapshot.data!;
                   return ListView.builder(
-                    padding: EdgeInsets.zero, // no extra side padding
+                    padding: EdgeInsets.zero,
                     itemCount: confessions.length,
                     itemBuilder: (context, index) {
                       final c = confessions[index];
                       return Container(
-                        margin: const EdgeInsets.symmetric(
-                          vertical: 6,
-                          horizontal: 0,
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        color: Colors.white, // card background
+                        margin: const EdgeInsets.symmetric(vertical: 6),
                         child: ConfessionCard(
                           username: c.username,
                           timeAgo: formatTimestamp(c.timestamp),
@@ -131,8 +136,9 @@ class _FeedScreenState extends State<FeedScreen> {
                           confession: c.text,
                           upvotes: c.upvotes,
                           comments: c.commentsCount,
-                          reactionCounts:
-                              c.reactions, // LinkedIn-style reactions
+                          reactionCounts: c.reactions,
+                          confessionId: c.id,
+                          userId: userId,
                         ),
                       );
                     },
