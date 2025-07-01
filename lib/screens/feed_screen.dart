@@ -1,10 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:whispr_app/api/api_services.dart';
 import 'package:whispr_app/helper/format_timestamp.dart';
 import 'package:whispr_app/models/confession_model.dart';
-import '../api/api_services.dart';
-import '../widgets/confession_card.dart';
+
+import 'package:http/http.dart' as http;
+import 'package:whispr_app/widgets/confession_card.dart';
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
@@ -14,17 +18,17 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  int _selectedTabIndex = 0;
-  final List<String> _tabs = ['All', 'Funny', 'Sad', 'Love', 'Work', 'Other'];
-
-  late Future<List<Confession>> _confessionsFuture;
+  int selectedTabIndex = 0;
+  List<String> tabs = ['All'];
+  late Future<List<Confession>> confessionsFuture;
   String userId = '';
 
   @override
   void initState() {
     super.initState();
     _loadUserId();
-    _confessionsFuture = ApiServices().getAllConfession();
+    _fetchCategories();
+    confessionsFuture = ApiServices().getAllConfession(userId);
   }
 
   Future<void> _loadUserId() async {
@@ -34,15 +38,37 @@ class _FeedScreenState extends State<FeedScreen> {
     });
   }
 
+  Future<void> _fetchCategories() async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          'https://whisper-2nhg.onrender.com/api/confession-categories',
+        ),
+      );
+      if (response.statusCode == 200) {
+        final List data = json.decode(response.body);
+        setState(() {
+          tabs = ['All'] + data.map((e) => e['name'].toString()).toList();
+        });
+      } else {
+        throw Exception('Failed to load categories');
+      }
+    } catch (e) {
+      print('Error fetching categories: $e');
+    }
+  }
+
   void _onTabSelected(int index) {
     setState(() {
-      _selectedTabIndex = index;
-      final selectedTab = _tabs[index];
+      selectedTabIndex = index;
+      final selectedTab = tabs[index];
+
       if (selectedTab == 'All') {
-        _confessionsFuture = ApiServices().getAllConfession();
+        confessionsFuture = ApiServices().getAllConfession(userId);
       } else {
-        _confessionsFuture = ApiServices().getConfessionByCategory(
+        confessionsFuture = ApiServices().getConfessionByCategory(
           capitalize(selectedTab),
+          userId,
         );
       }
     });
@@ -53,35 +79,30 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.grey[100], // light background for feed
+      color: Colors.grey[100],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top Tabs
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
             child: Row(
-              children: _tabs.asMap().entries.map((entry) {
+              children: tabs.asMap().entries.map((entry) {
                 int idx = entry.key;
                 String tab = entry.value;
-                final isSelected = _selectedTabIndex == idx;
+                final isSelected = selectedTabIndex == idx;
+
                 return GestureDetector(
                   onTap: () => _onTabSelected(idx),
                   child: Container(
-                    margin: const EdgeInsets.only(right: 4),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
+                    margin: EdgeInsets.only(right: 4),
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFF6C5CE7)
-                          : Colors.white,
+                      color: isSelected ? Color(0xFF6C5CE7) : Colors.white,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isSelected
-                            ? const Color(0xFF6C5CE7)
+                            ? Color(0xFF6C5CE7)
                             : Colors.grey[300]!,
                       ),
                     ),
@@ -99,10 +120,10 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
           ),
 
-          // Feed List
+          // FEED List
           Expanded(
-            child: FutureBuilder<List<Confession>>(
-              future: _confessionsFuture,
+            child: FutureBuilder(
+              future: confessionsFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -116,19 +137,18 @@ class _FeedScreenState extends State<FeedScreen> {
                 } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return Center(
                     child: Text(
-                      'No confessions found',
+                      'No Confessions Found',
                       style: GoogleFonts.inter(),
                     ),
                   );
                 } else {
-                  final confessions = snapshot.data!;
+                  final confession = snapshot.data!;
+
                   return ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: confessions.length,
                     itemBuilder: (context, index) {
-                      final c = confessions[index];
+                      final c = confession[index];
                       return Container(
-                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        margin: const EdgeInsets.symmetric(vertical: 8),
                         child: ConfessionCard(
                           username: c.username,
                           timeAgo: formatTimestamp(c.timestamp),

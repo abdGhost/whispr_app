@@ -30,8 +30,8 @@ class ApiServices {
     }
   }
 
-  Future<List<Confession>> getAllConfession() async {
-    final url = Uri.parse('$baseUrl/confessions/');
+  Future<List<Confession>> getAllConfession(String userId) async {
+    final url = Uri.parse('$baseUrl/confessions?userId=$userId');
 
     try {
       final response = await http.get(url);
@@ -50,8 +50,11 @@ class ApiServices {
     }
   }
 
-  Future<List<Confession>> getConfessionByCategory(String category) async {
-    final url = Uri.parse('$baseUrl/confessions?category=$category');
+  Future<List<Confession>> getConfessionByCategory(
+    String category,
+    String userId,
+  ) async {
+    final url = Uri.parse('$baseUrl/confessions?category=$category?');
 
     try {
       print('🔗 Get Confession By Category URL: $url');

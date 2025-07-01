@@ -27,13 +27,21 @@ class _WhisprAppState extends State<WhisprApp> {
   }
 
   void _registerAPI() async {
-    var userData = await _apiServices.registerOnAppStart();
+    SharedPreferences prefs = await SharedPreferences.getInstance();
 
-    if (userData != null) {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.setString('userId', userData['userId']);
-      await prefs.setString('username', userData['username']);
-      print('User data saved to cache: $userData');
+    bool isRegistered = prefs.getBool('isRegistered') ?? false;
+
+    if (!isRegistered) {
+      var userData = await _apiServices.registerOnAppStart();
+
+      if (userData != null) {
+        await prefs.setString('userId', userData['userId']);
+        await prefs.setString('username', userData['username']);
+        await prefs.setBool('isRzegistered', true);
+        print('User Registered and data saved to cache: $userData');
+      } else {
+        print('User already registered previously');
+      }
     }
   }
 
