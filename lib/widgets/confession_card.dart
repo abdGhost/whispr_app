@@ -15,6 +15,7 @@ class ConfessionCard extends StatefulWidget {
   final int upvotes;
   final int comments;
   final Map<String, int>? reactionCounts;
+  final bool isReact; // ✅ NEW
 
   const ConfessionCard({
     super.key,
@@ -27,6 +28,7 @@ class ConfessionCard extends StatefulWidget {
     required this.upvotes,
     required this.comments,
     this.reactionCounts,
+    this.isReact = false, // ✅ default false
   });
 
   @override
@@ -37,13 +39,22 @@ class _ConfessionCardState extends State<ConfessionCard> {
   OverlayEntry? _overlayEntry;
 
   bool isLiked = false;
-  String? userReaction; // stores user's selected emoji
+  String? userReaction;
   Map<String, int> currentReactions = {};
 
   @override
   void initState() {
     super.initState();
     currentReactions = Map<String, int>.from(widget.reactionCounts ?? {});
+
+    // ✅ initialize like/reaction based on isReact
+    if (widget.isReact) {
+      if (currentReactions.containsKey('👍')) {
+        isLiked = true;
+      } else if (currentReactions.isNotEmpty) {
+        userReaction = currentReactions.keys.first;
+      }
+    }
   }
 
   @override
@@ -85,10 +96,8 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
   void _likeConfession() async {
     _removeOverlay();
-
     setState(() {
       if (isLiked) {
-        // Unlike
         String emoji = '👍';
         if (currentReactions.containsKey(emoji)) {
           currentReactions[emoji] = currentReactions[emoji]! - 1;
@@ -96,7 +105,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
         }
         isLiked = false;
       } else {
-        // If already reacted, remove reaction
         if (userReaction != null) {
           if (currentReactions.containsKey(userReaction!)) {
             currentReactions[userReaction!] =
@@ -106,29 +114,24 @@ class _ConfessionCardState extends State<ConfessionCard> {
           }
           userReaction = null;
         }
-        // Like
         String emoji = '👍';
         currentReactions.update(emoji, (value) => value + 1, ifAbsent: () => 1);
         isLiked = true;
       }
     });
-
     await _submitReaction();
   }
 
   void _reactConfession(String emoji) async {
     _removeOverlay();
-
     setState(() {
       if (userReaction == emoji) {
-        // Un-react
         if (currentReactions.containsKey(emoji)) {
           currentReactions[emoji] = currentReactions[emoji]! - 1;
           if (currentReactions[emoji] == 0) currentReactions.remove(emoji);
         }
         userReaction = null;
       } else {
-        // If already liked, unlike first
         if (isLiked) {
           String likeEmoji = '👍';
           if (currentReactions.containsKey(likeEmoji)) {
@@ -138,7 +141,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
           }
           isLiked = false;
         }
-        // If had other reaction, remove it
         if (userReaction != null && userReaction != emoji) {
           if (currentReactions.containsKey(userReaction!)) {
             currentReactions[userReaction!] =
@@ -147,12 +149,10 @@ class _ConfessionCardState extends State<ConfessionCard> {
               currentReactions.remove(userReaction!);
           }
         }
-        // Add new reaction
         currentReactions.update(emoji, (value) => value + 1, ifAbsent: () => 1);
         userReaction = emoji;
       }
     });
-
     await _submitReaction();
   }
 
@@ -202,7 +202,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
     overlay.insert(_overlayEntry!);
 
-    // Auto dismiss after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
       _removeOverlay();
     });

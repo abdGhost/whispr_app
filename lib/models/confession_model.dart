@@ -7,7 +7,8 @@ class Confession {
   final int commentsCount;
   final String timestamp;
   final String username;
-  final Map<String, int>? reactions; // ✅ Add this field
+  final Map<String, int>
+  reactions; // ✅ updated to non-nullable with empty map default
 
   Confession({
     required this.id,
@@ -18,7 +19,7 @@ class Confession {
     required this.commentsCount,
     required this.timestamp,
     required this.username,
-    this.reactions,
+    required this.reactions,
   });
 
   factory Confession.fromJson(Map<String, dynamic> json) {
@@ -26,17 +27,19 @@ class Confession {
       id: json['_id'] ?? '',
       text: json['text'] ?? '',
       address: json['address'] ?? '',
-      category: json['category'] ?? '',
+      category: json['categoryId'] != null && json['categoryId']['name'] != null
+          ? json['categoryId']['name']
+          : '',
       upvotes: json['upvotes'] ?? 0,
       commentsCount: json['commentsCount'] ?? 0,
-      timestamp: json['timestamp'] ?? json['createdAt'] ?? '',
+      timestamp: json['createdAt'] ?? '',
       username:
           json['authorId'] != null && json['authorId']['randomUsername'] != null
           ? json['authorId']['randomUsername']
           : 'Anonymous',
       reactions: json['reactions'] != null
           ? Map<String, int>.from(json['reactions'])
-          : {}, // ✅ parse reactions as Map<String, int>
+          : {}, // ✅ parse reactions safely as Map<String, int>
     );
   }
 }
