@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+import 'package:whispr_app/widgets/show_comments_modal.dart';
+
 class ConfessionCard extends StatefulWidget {
   final String confessionId;
   final String userId;
@@ -211,6 +213,50 @@ class _ConfessionCardState extends State<ConfessionCard> {
     _overlayEntry = null;
   }
 
+  void _openCommentModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return FractionallySizedBox(
+          heightFactor: 0.9,
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[400],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Comments',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    'Comments list goes here',
+                    style: GoogleFonts.inter(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     int totalReactions = currentReactions.isNotEmpty
@@ -220,10 +266,10 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,7 +322,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
           // Reaction + Comment row
           if (currentReactions.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
                   Wrap(
@@ -315,11 +361,11 @@ class _ConfessionCardState extends State<ConfessionCard> {
               ),
             ),
 
-          const Divider(thickness: 0.4, height: 20),
+          const Divider(thickness: 0.4),
 
-          // Action bar (Like, Comment, Share, Send)
+          // Action bar
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -346,7 +392,12 @@ class _ConfessionCardState extends State<ConfessionCard> {
                     ],
                   ),
                 ),
-                _buildActionIcon(Icons.chat_bubble_outline, 'Comment'),
+                GestureDetector(
+                  onTap: () {
+                    showCommentsModal(context);
+                  },
+                  child: _buildActionIcon(Icons.chat_bubble_outline, 'Comment'),
+                ),
                 _buildActionIcon(Icons.share_outlined, 'Share'),
                 _buildActionIcon(Icons.send_outlined, 'Send'),
               ],
