@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  runApp(WhisprApp());
+  runApp(const WhisprApp());
 }
 
 class WhisprApp extends StatefulWidget {
@@ -26,22 +26,26 @@ class _WhisprAppState extends State<WhisprApp> {
     _registerAPI();
   }
 
-  void _registerAPI() async {
+  /// Registers the user if not already registered
+  Future<void> _registerAPI() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
     bool isRegistered = prefs.getBool('isRegistered') ?? false;
 
-    if (!isRegistered) {
-      var userData = await _apiServices.registerOnAppStart();
+    if (isRegistered) {
+      print('User already registered previously');
+      return;
+    }
 
-      if (userData != null) {
-        await prefs.setString('userId', userData['userId']);
-        await prefs.setString('username', userData['username']);
-        await prefs.setBool('isRzegistered', true);
-        print('User Registered and data saved to cache: $userData');
-      } else {
-        print('User already registered previously');
-      }
+    var userData = await _apiServices.registerOnAppStart();
+
+    if (userData != null) {
+      await prefs.setString('userId', userData['userId']);
+      await prefs.setString('username', userData['username']);
+      await prefs.setBool('isRegistered', true);
+      print('User Registered and data saved to cache: $userData');
+    } else {
+      print('Registration failed.');
     }
   }
 
@@ -50,12 +54,12 @@ class _WhisprAppState extends State<WhisprApp> {
     return MaterialApp(
       title: 'Whispr',
       theme: ThemeData(
-        primaryColor: Color(0xFF6C5CE7),
+        primaryColor: const Color(0xFF6C5CE7),
         textTheme: GoogleFonts.interTextTheme(),
         scaffoldBackgroundColor: Colors.white,
       ),
       debugShowCheckedModeBanner: false,
-      home: HomeScreen(),
+      home: const HomeScreen(),
     );
   }
 }

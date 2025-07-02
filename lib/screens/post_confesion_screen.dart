@@ -1,12 +1,12 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geocoding/geocoding.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:whispr_app/widgets/location_picker_modal.dart';
 
 class PostConfessionScreen extends StatefulWidget {
   const PostConfessionScreen({super.key});
@@ -17,18 +17,58 @@ class PostConfessionScreen extends StatefulWidget {
 
 class _PostConfessionScreenState extends State<PostConfessionScreen> {
   final TextEditingController _controller = TextEditingController();
-  String _selectedCategory = 'Funny';
+  String? _selectedCategoryId;
   final int _maxLength = 280;
 
   LatLng? _selectedLocation;
   String? _locationName;
-  String? _city;
-  String? _state;
-  String? _country;
+
+  String? _authorId;
+  String? _username;
 
   final MapController _mapController = MapController();
 
-  final List<String> _categories = ['Funny', 'Sad', 'Love', 'Work', 'Other'];
+  List<Category> _categories = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+    _fetchCategories();
+  }
+
+  /// Load authorId and username from SharedPreferences
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _authorId = prefs.getString('userId');
+      _username = prefs.getString('username');
+    });
+  }
+
+  /// Fetch categories from API
+  Future<void> _fetchCategories() async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          'https://whisper-2nhg.onrender.com/api/confession-categories',
+        ),
+      );
+      if (response.statusCode == 200) {
+        final List data = json.decode(response.body);
+        setState(() {
+          _categories = data.map((e) => Category.fromJson(e)).toList();
+          if (_categories.isNotEmpty) {
+            _selectedCategoryId = _categories.first.id;
+          }
+        });
+      } else {
+        print('Failed to load categories');
+      }
+    } catch (e) {
+      print('Error fetching categories: $e');
+    }
+  }
 
   Future<void> _selectLocation() async {
     LatLng? pickedLocation = await showModalBottomSheet<LatLng>(
@@ -36,7 +76,7 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       builder: (context) {
-        return FractionallySizedBox(
+        return const FractionallySizedBox(
           heightFactor: 0.9,
           child: LocationPickerModal(),
         );
@@ -63,7 +103,6 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
         if (country.isNotEmpty)
           fullName += (fullName.isNotEmpty ? ', ' : '') + country;
 
-        // fallback to lat/lng if fullName empty
         if (fullName.isEmpty) {
           fullName =
               '${pickedLocation.latitude.toStringAsFixed(4)}, ${pickedLocation.longitude.toStringAsFixed(4)}';
@@ -71,9 +110,6 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
 
         setState(() {
           _selectedLocation = pickedLocation;
-          _city = city;
-          _state = state;
-          _country = country;
           _locationName = fullName;
         });
 
@@ -96,10 +132,13 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
   Future<void> _postConfession() async {
     final text = _controller.text.trim();
 
-    if (text.isEmpty || _selectedCategory == null) {
+    if (text.isEmpty ||
+        _selectedLocation == null ||
+        _authorId == null ||
+        _selectedCategoryId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please enter confession text and select location'),
+        const SnackBar(
+          content: Text('Please fill all fields and ensure user is registered'),
         ),
       );
       return;
@@ -111,7 +150,7 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
 
     final body = {
       'text': text,
-      'category': _selectedCategory,
+      'categoryId': _selectedCategoryId,
       'location': {
         'type': "Point",
         "coordinates": [
@@ -120,7 +159,8 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
         ],
       },
       "address": _locationName ?? "",
-      'authorId': "6861b49812acae8f31fa3cbb",
+      'authorId': _authorId,
+      'username': _username,
     };
 
     try {
@@ -135,7 +175,7 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
 
       if (response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Confession Posted Successfull')),
+          const SnackBar(content: Text('Confession Posted Successfully')),
         );
         _controller.clear();
 
@@ -144,14 +184,14 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
           _locationName = null;
         });
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to post confession')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to post confession')),
+        );
       }
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error posting confession')));
+      ).showSnackBar(SnackBar(content: Text('Error posting confession: $e')));
     }
   }
 
@@ -159,7 +199,7 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -171,7 +211,7 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             TextField(
               controller: _controller,
               maxLength: _maxLength,
@@ -186,14 +226,14 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: Colors.grey[400]!),
                 ),
-                contentPadding: EdgeInsets.symmetric(
+                contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 12,
                 ),
               ),
               style: GoogleFonts.inter(fontSize: 14),
             ),
-            SizedBox(height: 28),
+            const SizedBox(height: 28),
 
             // Category section
             Text(
@@ -203,51 +243,60 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: _categories.map((category) {
-                final isSelected = _selectedCategory == category;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedCategory = category;
-                    });
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Color(0xFF6C5CE7) : Colors.white,
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(
-                        color: isSelected
-                            ? Color(0xFF6C5CE7)
-                            : Colors.grey[300]!,
-                      ),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: Color(0xFF6C5CE7).withOpacity(0.2),
-                                blurRadius: 8,
-                                offset: Offset(0, 4),
-                              ),
-                            ]
-                          : [],
-                    ),
-                    child: Text(
-                      category,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: isSelected ? Colors.white : Colors.black,
-                      ),
-                    ),
+            const SizedBox(height: 12),
+            _categories.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: _categories.map((category) {
+                      final isSelected = _selectedCategoryId == category.id;
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedCategoryId = category.id;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF6C5CE7)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF6C5CE7)
+                                  : Colors.grey[300]!,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF6C5CE7,
+                                      ).withOpacity(0.2),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                          child: Text(
+                            category.name,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: isSelected ? Colors.white : Colors.black,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
-                );
-              }).toList(),
-            ),
-            SizedBox(height: 28),
+            const SizedBox(height: 28),
 
             // Location picker
             Text(
@@ -257,7 +306,7 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             GestureDetector(
               onTap: _selectLocation,
               child: Container(
@@ -266,11 +315,17 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: Colors.grey[300]!),
                 ),
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 child: Row(
                   children: [
-                    Icon(Icons.location_on_outlined, color: Color(0xFF6C5CE7)),
-                    SizedBox(width: 10),
+                    const Icon(
+                      Icons.location_on_outlined,
+                      color: Color(0xFF6C5CE7),
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         _selectedLocation != null
@@ -282,12 +337,12 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
                         ),
                       ),
                     ),
-                    Icon(Icons.edit, color: Color(0xFF6C5CE7)),
+                    const Icon(Icons.edit, color: Color(0xFF6C5CE7)),
                   ],
                 ),
               ),
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
 
             // Map preview
             if (_selectedLocation != null)
@@ -317,7 +372,7 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
                             point: _selectedLocation!,
                             width: 40,
                             height: 40,
-                            child: Icon(
+                            child: const Icon(
                               Icons.location_pin,
                               color: Colors.red,
                               size: 40,
@@ -329,15 +384,15 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
                   ),
                 ),
               ),
-            SizedBox(height: 40),
+            const SizedBox(height: 40),
 
             // Post button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFFF6B81),
-                  padding: EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: const Color(0xFFFF6B81),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -361,78 +416,14 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
   }
 }
 
-// Location picker modal as bottom sheet overlay (without title)
-class LocationPickerModal extends StatefulWidget {
-  const LocationPickerModal({super.key});
+/// Category model class
+class Category {
+  final String id;
+  final String name;
 
-  @override
-  State<LocationPickerModal> createState() => _LocationPickerModalState();
-}
+  Category({required this.id, required this.name});
 
-class _LocationPickerModalState extends State<LocationPickerModal> {
-  LatLng? _pickedLocation;
-  final LatLng _initialLocation = LatLng(19.0760, 72.8777); // Mumbai
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: FlutterMap(
-            options: MapOptions(
-              initialCenter: _initialLocation,
-              initialZoom: 13.0,
-              onTap: (tapPosition, latlng) {
-                setState(() {
-                  _pickedLocation = latlng;
-                });
-              },
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                userAgentPackageName: 'com.example.whisprapp',
-              ),
-              if (_pickedLocation != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _pickedLocation!,
-                      width: 40,
-                      height: 40,
-                      child: Icon(
-                        Icons.location_pin,
-                        color: Colors.red,
-                        size: 40,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: EdgeInsets.all(16.0),
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF6B81)),
-            onPressed: () {
-              if (_pickedLocation != null) {
-                Navigator.pop(context, _pickedLocation);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Please select a location on the map'),
-                  ),
-                );
-              }
-            },
-            child: Text(
-              'Confirm Location',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ),
-      ],
-    );
+  factory Category.fromJson(Map<String, dynamic> json) {
+    return Category(id: json['_id'] ?? '', name: json['name'] ?? '');
   }
 }

@@ -54,19 +54,26 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
   }
 
   Future<void> fetchComments() async {
+    print('[fetchComments] API call started');
     setState(() => isLoading = true);
     final url = Uri.parse(
-      'https://whisper-2nhg.onrender.com/api/comment/confession/${widget.confessionId}?page=1&size=10',
+      'https://whisper-2nhg.onrender.com/api/comment/confession/${widget.confessionId}',
     );
 
     try {
       final response = await http.get(url);
+      final formattedJson = const JsonEncoder.withIndent(
+        '  ',
+      ).convert(jsonDecode(response.body));
+      print('[fetchComments] Full response:\n$formattedJson');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
           comments = List<Map<String, dynamic>>.from(data['comments']);
           isLoading = false;
         });
+        print('${response.body}'); // 🔍 Prints full JSON body here
       } else {
         print('[fetchComments] Failed: ${response.body}');
         setState(() => isLoading = false);
@@ -81,6 +88,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     final text = _commentController.text.trim();
     if (text.isEmpty || userId.isEmpty) return;
 
+    print('[postComment] Posting comment: $text');
     setState(() => isPosting = true);
 
     final url = Uri.parse('https://whisper-2nhg.onrender.com/api/comment/add');
@@ -99,19 +107,39 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
         body: jsonEncode(body),
       );
 
+      print('[postComment] Status: ${response.statusCode}');
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final newComment = Map<String, dynamic>.from(data['comment']);
+        print('[postComment] Added comment ID: ${newComment['_id']}');
+
+        // Patch quotedCommentId for local UI nesting
+        if (newComment['quotedCommentId'] != null &&
+            newComment['quotedCommentId'] is String) {
+          final parentId = newComment['quotedCommentId'];
+          final parentComment = comments.firstWhere(
+            (c) => c['_id'] == parentId,
+            orElse: () => {},
+          );
+          if (parentComment.isNotEmpty) {
+            newComment['quotedCommentId'] = {
+              "_id": parentId,
+              "username": parentComment['username'] ?? 'Anonymous',
+              "text": parentComment['text'] ?? '',
+            };
+          }
+        }
+
         setState(() {
           comments.insert(0, newComment);
           _commentController.clear();
           quotedCommentId = null;
         });
       } else {
-        print('Failed to post comment: ${response.body}');
+        print('[postComment] Failed: ${response.body}');
       }
     } catch (e) {
-      print('Error posting comment: $e');
+      print('[postComment] Error: $e');
     } finally {
       setState(() => isPosting = false);
     }
@@ -140,8 +168,67 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     );
   }
 
+  /// Group comments by parent for nested rendering
+  Map<String, List<Map<String, dynamic>>> groupCommentsByParent() {
+    Map<String, List<Map<String, dynamic>>> tree = {};
+    for (var comment in comments) {
+      String parentId =
+          comment['quotedCommentId'] != null &&
+              comment['quotedCommentId'] is Map &&
+              comment['quotedCommentId']['_id'] != null
+          ? comment['quotedCommentId']['_id']
+          : 'root';
+      if (!tree.containsKey(parentId)) {
+        tree[parentId] = [];
+      }
+      tree[parentId]!.add(comment);
+    }
+    return tree;
+  }
+
+  /// Recursively build nested comment widgets
+  List<Widget> buildCommentTree(
+    Map<String, List<Map<String, dynamic>>> tree,
+    String parentId,
+    int indentLevel,
+  ) {
+    if (!tree.containsKey(parentId)) return [];
+
+    List<Widget> widgets = [];
+    for (var comment in tree[parentId]!) {
+      String id = comment['_id'];
+      String? quotedUsername;
+      if (comment['quotedCommentId'] != null &&
+          comment['quotedCommentId'] is Map &&
+          comment['quotedCommentId']['username'] != null) {
+        quotedUsername = comment['quotedCommentId']['username'];
+      }
+
+      widgets.add(
+        Padding(
+          padding: EdgeInsets.only(left: indentLevel * 16.0),
+          child: _buildCommentItem(
+            context: context,
+            name: comment['username'] ?? 'Anonymous',
+            time: formatTimeAgo(comment['createdAt'] ?? ''),
+            text: comment['text'] ?? '',
+            commentId: id,
+            quotedUsername: quotedUsername,
+          ),
+        ),
+      );
+
+      // Render replies
+      widgets.addAll(buildCommentTree(tree, id, indentLevel + 1));
+    }
+
+    return widgets;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final commentTree = groupCommentsByParent();
+
     return Column(
       children: [
         const SizedBox(height: 8),
@@ -154,8 +241,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           ),
         ),
         const SizedBox(height: 12),
-
-        // Header
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -173,8 +258,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
         ),
         const SizedBox(height: 4),
         const Divider(thickness: 0.6, height: 1),
-
-        // Comments list or loader
         Expanded(
           child: isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -185,34 +268,9 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
                     style: GoogleFonts.inter(fontSize: 14),
                   ),
                 )
-              : ListView.builder(
-                  itemCount: comments.length,
-                  itemBuilder: (context, index) {
-                    final comment = comments[index];
-
-                    // Safely parse quotedCommentId as Map or null
-                    String? quotedUsername;
-                    if (comment['quotedCommentId'] != null &&
-                        comment['quotedCommentId'] is Map &&
-                        comment['quotedCommentId']['username'] != null) {
-                      quotedUsername = comment['quotedCommentId']['username'];
-                    }
-
-                    return _buildCommentItem(
-                      context: context,
-                      name: comment['username'] ?? 'Anonymous',
-                      time: formatTimeAgo(comment['createdAt'] ?? ''),
-                      text: comment['text'] ?? '',
-                      commentId: comment['_id'],
-                      quotedUsername: quotedUsername,
-                    );
-                  },
-                ),
+              : ListView(children: buildCommentTree(commentTree, 'root', 0)),
         ),
-
         const Divider(thickness: 0.6, height: 1),
-
-        // Quick reply chips
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: SingleChildScrollView(
@@ -225,8 +283,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
             ),
           ),
         ),
-
-        // Add comment bar
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
           child: Row(
@@ -300,8 +356,15 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     required String commentId,
     String? quotedUsername,
   }) {
+    String cleanText = text;
+    if (quotedUsername != null &&
+        quotedUsername.isNotEmpty &&
+        text.startsWith('@$quotedUsername')) {
+      cleanText = text.substring(quotedUsername.length + 1).trim();
+    }
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -340,11 +403,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
             ],
           ),
           const SizedBox(height: 4),
-
-          // Show quoted username if different from comment author
-          if (quotedUsername != null &&
-              quotedUsername.isNotEmpty &&
-              quotedUsername != name)
+          if (quotedUsername != null && quotedUsername.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 48, bottom: 4),
               child: Text(
@@ -356,18 +415,9 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
                 ),
               ),
             ),
-
-          // Comment text without duplicated mention
           Padding(
             padding: const EdgeInsets.only(left: 48),
-            child: Text(
-              (quotedUsername != null &&
-                      quotedUsername.isNotEmpty &&
-                      text.startsWith('@$quotedUsername'))
-                  ? text.substring(quotedUsername.length + 2).trim()
-                  : text,
-              style: GoogleFonts.inter(fontSize: 14),
-            ),
+            child: Text(cleanText, style: GoogleFonts.inter(fontSize: 14)),
           ),
           Padding(
             padding: const EdgeInsets.only(left: 48, top: 4),
