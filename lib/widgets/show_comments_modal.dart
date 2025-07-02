@@ -49,10 +49,13 @@ void showCommentsModal(BuildContext context) {
                 itemCount: 4,
                 itemBuilder: (context, index) {
                   return _buildCommentItem(
+                    context: context,
                     name: 'Shubham Kumar Singh',
                     title: 'Territory Sales Manager | I&B Crystal Cro...',
                     time: '1h',
                     text: index == 0 ? 'Right sir 👍' : 'Great perspective 💯',
+                    hasReplies:
+                        index == 0, // example: first comment has replies
                   );
                 },
               ),
@@ -118,10 +121,12 @@ void showCommentsModal(BuildContext context) {
 }
 
 Widget _buildCommentItem({
+  required BuildContext context,
   required String name,
   required String title,
   required String time,
   required String text,
+  bool hasReplies = false,
 }) {
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -197,15 +202,128 @@ Widget _buildCommentItem({
                 style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(width: 16),
-              Text(
-                'Reply',
-                style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600]),
+              GestureDetector(
+                onTap: () {
+                  // Handle reply click
+                  print('Reply clicked for $name');
+                },
+                child: Text(
+                  'Reply',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
               ),
             ],
           ),
         ),
+        // Nested replies placeholder
+        if (hasReplies)
+          Padding(
+            padding: const EdgeInsets.only(left: 48, top: 8),
+            child: Column(
+              children: [
+                _buildReplyItem(
+                  name: 'Abdul Taher Khan',
+                  title: 'Flutter Developer at Elite Back...',
+                  time: 'now',
+                  text: name, // replying to main commenter
+                ),
+              ],
+            ),
+          ),
       ],
     ),
+  );
+}
+
+Widget _buildReplyItem({
+  required String name,
+  required String title,
+  required String time,
+  required String text,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          const CircleAvatar(
+            radius: 18,
+            backgroundImage: NetworkImage('https://i.pravatar.cc/150?u=user2'),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '• You',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      time,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.more_vert, color: Colors.grey),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Padding(
+        padding: const EdgeInsets.only(left: 48),
+        child: Text(text, style: GoogleFonts.inter(fontSize: 14)),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(left: 48, top: 4),
+        child: Row(
+          children: [
+            Text(
+              'Like',
+              style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600]),
+            ),
+            const SizedBox(width: 16),
+            Text(
+              'Reply',
+              style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      ),
+    ],
   );
 }
 
