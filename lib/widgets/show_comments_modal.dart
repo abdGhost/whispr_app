@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:convert';
 
 void showCommentsModal(BuildContext context, String confessionId) {
@@ -29,6 +30,8 @@ class CommentsModalContent extends StatefulWidget {
 }
 
 class _CommentsModalContentState extends State<CommentsModalContent> {
+  late IO.Socket socket;
+
   bool isLoading = true;
   bool isPosting = false;
   List<Map<String, dynamic>> comments = [];
@@ -43,6 +46,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     super.initState();
     _loadUserData();
     fetchComments();
+    initSocket();
   }
 
   Future<void> _loadUserData() async {
@@ -53,8 +57,40 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     });
   }
 
+  void initSocket() {
+    socket = IO.io('https://whisper-2nhg.onrender.com', <String, dynamic>{
+      'transports': ['websocket'],
+    });
+
+    socket.connect();
+
+    socket.onConnect((_) {
+      print('✅ Connected to socket server');
+      socket.emit('joinConfession', widget.confessionId);
+    });
+
+    socket.on('joinConfession', (data) {
+      print('[Socket] joinConfession: $data');
+    });
+
+    socket.on('commentAdded', (data) {
+      print('[Socket] Received comments: $data');
+      if (!mounted) return;
+      setState(() {
+        if (data is List) {
+          comments = List<Map<String, dynamic>>.from(data);
+        } else if (data is Map) {
+          comments.insert(0, Map<String, dynamic>.from(data));
+        }
+        isLoading = false;
+      });
+    });
+
+    socket.onDisconnect((_) => print('❌ Disconnected from socket server'));
+  }
+
   Future<void> fetchComments() async {
-    print('[fetchComments] API call started');
+    // print('[fetchComments] API call started');
     setState(() => isLoading = true);
     final url = Uri.parse(
       'https://whisper-2nhg.onrender.com/api/comment/confession/${widget.confessionId}',
@@ -65,7 +101,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
       final formattedJson = const JsonEncoder.withIndent(
         '  ',
       ).convert(jsonDecode(response.body));
-      print('[fetchComments] Full response:\n$formattedJson');
+      // print('[fetchComments] Full response:\n$formattedJson');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -73,13 +109,12 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           comments = List<Map<String, dynamic>>.from(data['comments']);
           isLoading = false;
         });
-        print('${response.body}'); // 🔍 Prints full JSON body here
       } else {
-        print('[fetchComments] Failed: ${response.body}');
+        // print('[fetchComments] Failed: ${response.body}');
         setState(() => isLoading = false);
       }
     } catch (e) {
-      print('[fetchComments] Error: $e');
+      // print('[fetchComments] Error: $e');
       setState(() => isLoading = false);
     }
   }
@@ -88,7 +123,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     final text = _commentController.text.trim();
     if (text.isEmpty || userId.isEmpty) return;
 
-    print('[postComment] Posting comment: $text');
+    // print('[postComment] Posting comment: $text');
     setState(() => isPosting = true);
 
     final url = Uri.parse('https://whisper-2nhg.onrender.com/api/comment/add');
@@ -107,11 +142,11 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
         body: jsonEncode(body),
       );
 
-      print('[postComment] Status: ${response.statusCode}');
+      // print('[postComment] Status: ${response.statusCode}');
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final newComment = Map<String, dynamic>.from(data['comment']);
-        print('[postComment] Added comment ID: ${newComment['_id']}');
+        // print('[postComment] Added comment ID: ${newComment['_id']}');
 
         // Patch quotedCommentId for local UI nesting
         if (newComment['quotedCommentId'] != null &&
@@ -130,19 +165,32 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           }
         }
 
+        // Emit to socket
+        socket.emit('sendComment', {
+          ...newComment,
+          'confessionId': widget.confessionId,
+        });
+
         setState(() {
           comments.insert(0, newComment);
           _commentController.clear();
           quotedCommentId = null;
         });
       } else {
-        print('[postComment] Failed: ${response.body}');
+        // print('[postComment] Failed: ${response.body}');
       }
     } catch (e) {
-      print('[postComment] Error: $e');
+      // print('[postComment] Error: $e');
     } finally {
       setState(() => isPosting = false);
     }
+  }
+
+  @override
+  void dispose() {
+    socket.disconnect();
+    _commentController.dispose();
+    super.dispose();
   }
 
   String formatTimeAgo(String isoDate) {
@@ -155,12 +203,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     return '${duration.inDays}d ago';
   }
 
-  @override
-  void dispose() {
-    _commentController.dispose();
-    super.dispose();
-  }
-
   void handleQuickReplyTap(String text) {
     _commentController.text = text;
     _commentController.selection = TextSelection.fromPosition(
@@ -168,7 +210,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     );
   }
 
-  /// Group comments by parent for nested rendering
   Map<String, List<Map<String, dynamic>>> groupCommentsByParent() {
     Map<String, List<Map<String, dynamic>>> tree = {};
     for (var comment in comments) {
@@ -186,7 +227,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     return tree;
   }
 
-  /// Recursively build nested comment widgets
   List<Widget> buildCommentTree(
     Map<String, List<Map<String, dynamic>>> tree,
     String parentId,
@@ -218,7 +258,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
         ),
       );
 
-      // Render replies
       widgets.addAll(buildCommentTree(tree, id, indentLevel + 1));
     }
 

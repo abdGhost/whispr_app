@@ -37,7 +37,7 @@ class ApiServices {
 
     try {
       final response = await http.get(url);
-      print('🔗 Get All Confessions Response: ${response.body}');
+      // print('🔗 Get All Confessions Response: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
