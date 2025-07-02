@@ -24,10 +24,10 @@ class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
 
   @override
-  State<FeedScreen> createState() => _FeedScreenState();
+  State<FeedScreen> createState() => FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> {
+class FeedScreenState extends State<FeedScreen> {
   int selectedTabIndex = 0;
   List<Category> categories = [];
   Future<List<Confession>>? confessionsFuture;
@@ -42,7 +42,7 @@ class _FeedScreenState extends State<FeedScreen> {
   Future<void> _initialize() async {
     await _loadUserId();
     await _fetchCategories();
-    _fetchConfessions(); // initial load for 'All'
+    fetchConfessions(); // initial load for 'All'
   }
 
   Future<void> _loadUserId() async {
@@ -73,7 +73,8 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  void _fetchConfessions({String? categoryId}) {
+  /// Public method to refresh confessions externally
+  void fetchConfessions({String? categoryId}) {
     setState(() {
       if (categoryId == null || categoryId == 'all') {
         confessionsFuture = ApiServices().getAllConfession(userId);
@@ -91,7 +92,7 @@ class _FeedScreenState extends State<FeedScreen> {
       selectedTabIndex = index;
     });
     final selectedCategory = categories[index];
-    _fetchConfessions(categoryId: selectedCategory.id);
+    fetchConfessions(categoryId: selectedCategory.id);
   }
 
   @override

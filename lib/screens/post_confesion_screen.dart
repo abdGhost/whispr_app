@@ -9,7 +9,9 @@ import 'package:http/http.dart' as http;
 import 'package:whispr_app/widgets/location_picker_modal.dart';
 
 class PostConfessionScreen extends StatefulWidget {
-  const PostConfessionScreen({super.key});
+  final VoidCallback? onPostSuccess;
+
+  const PostConfessionScreen({super.key, this.onPostSuccess});
 
   @override
   State<PostConfessionScreen> createState() => _PostConfessionScreenState();
@@ -29,6 +31,8 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
   final MapController _mapController = MapController();
 
   List<Category> _categories = [];
+  bool _isLoadingCategories = false;
+  bool _isPosting = false;
 
   @override
   void initState() {
@@ -48,6 +52,10 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
 
   /// Fetch categories from API
   Future<void> _fetchCategories() async {
+    setState(() {
+      _isLoadingCategories = true;
+    });
+
     try {
       final response = await http.get(
         Uri.parse(
@@ -68,6 +76,10 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
     } catch (e) {
       print('Error fetching categories: $e');
     }
+
+    setState(() {
+      _isLoadingCategories = false;
+    });
   }
 
   Future<void> _selectLocation() async {
@@ -144,6 +156,10 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
       return;
     }
 
+    setState(() {
+      _isPosting = true;
+    });
+
     final url = Uri.parse(
       'https://whisper-2nhg.onrender.com/api/confessions/create',
     );
@@ -183,9 +199,18 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
           _selectedLocation = null;
           _locationName = null;
         });
+
+        /// Call onPostSuccess callback to navigate back to feed screen tab
+        if (widget.onPostSuccess != null) {
+          widget.onPostSuccess!();
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to post confession')),
+          SnackBar(
+            content: Text(
+              'Failed to post confession: ${response.reasonPhrase}',
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -193,224 +218,245 @@ class _PostConfessionScreenState extends State<PostConfessionScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Error posting confession: $e')));
     }
+
+    setState(() {
+      _isPosting = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Confession input
-            Text(
-              "Write your confession",
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _controller,
-              maxLength: _maxLength,
-              maxLines: 5,
-              decoration: InputDecoration(
-                hintText: "What's on your mind...",
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[400]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey[400]!),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-              ),
-              style: GoogleFonts.inter(fontSize: 14),
-            ),
-            const SizedBox(height: 28),
-
-            // Category section
-            Text(
-              'Category',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _categories.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: _categories.map((category) {
-                      final isSelected = _selectedCategoryId == category.id;
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedCategoryId = category.id;
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? const Color(0xFF6C5CE7)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(
-                              color: isSelected
-                                  ? const Color(0xFF6C5CE7)
-                                  : Colors.grey[300]!,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: const Color(
-                                        0xFF6C5CE7,
-                                      ).withOpacity(0.2),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ]
-                                : [],
-                          ),
-                          child: Text(
-                            category.name,
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: isSelected ? Colors.white : Colors.black,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-            const SizedBox(height: 28),
-
-            // Location picker
-            Text(
-              'Location',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: _selectLocation,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                      color: Color(0xFF6C5CE7),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _selectedLocation != null
-                            ? _locationName ?? 'Fetching location name...'
-                            : 'Select location',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const Icon(Icons.edit, color: Color(0xFF6C5CE7)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Map preview
-            if (_selectedLocation != null)
-              Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: _selectedLocation!,
-                      initialZoom: 13.0,
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                        userAgentPackageName: 'com.example.whisprapp',
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: _selectedLocation!,
-                            width: 40,
-                            height: 40,
-                            child: const Icon(
-                              Icons.location_pin,
-                              color: Colors.red,
-                              size: 40,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            const SizedBox(height: 40),
-
-            // Post button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B81),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 2,
-                ),
-                onPressed: _postConfession,
-                child: Text(
-                  'Post Confession',
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                /// Confession input
+                Text(
+                  "Write your confession",
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
                   ),
                 ),
-              ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _controller,
+                  maxLength: _maxLength,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    hintText: "What's on your mind...",
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[400]!),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey[400]!),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                  ),
+                  style: GoogleFonts.inter(fontSize: 14),
+                ),
+                const SizedBox(height: 28),
+
+                /// Category section
+                Text(
+                  'Category',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _isLoadingCategories
+                    ? const Center(child: CircularProgressIndicator())
+                    : Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: _categories.map((category) {
+                          final isSelected = _selectedCategoryId == category.id;
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _selectedCategoryId = category.id;
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(0xFF6C5CE7)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(30),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFF6C5CE7)
+                                      : Colors.grey[300]!,
+                                ),
+                                boxShadow: isSelected
+                                    ? [
+                                        BoxShadow(
+                                          color: const Color(
+                                            0xFF6C5CE7,
+                                          ).withOpacity(0.2),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ]
+                                    : [],
+                              ),
+                              child: Text(
+                                category.name,
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.black,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                const SizedBox(height: 28),
+
+                /// Location picker
+                Text(
+                  'Location',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: _selectLocation,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          color: Color(0xFF6C5CE7),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _selectedLocation != null
+                                ? _locationName ?? 'Fetching location name...'
+                                : 'Select location',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        const Icon(Icons.edit, color: Color(0xFF6C5CE7)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                /// Map preview
+                if (_selectedLocation != null)
+                  Container(
+                    height: 200,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: FlutterMap(
+                        mapController: _mapController,
+                        options: MapOptions(
+                          initialCenter: _selectedLocation!,
+                          initialZoom: 13.0,
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                            userAgentPackageName: 'com.example.whisprapp',
+                          ),
+                          MarkerLayer(
+                            markers: [
+                              Marker(
+                                point: _selectedLocation!,
+                                width: 40,
+                                height: 40,
+                                child: const Icon(
+                                  Icons.location_pin,
+                                  color: Colors.red,
+                                  size: 40,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 40),
+
+                /// Post button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6B81),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 2,
+                    ),
+                    onPressed: _isPosting ? null : _postConfession,
+                    child: _isPosting
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Text(
+                            'Post Confession',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
