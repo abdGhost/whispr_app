@@ -213,50 +213,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
     _overlayEntry = null;
   }
 
-  void _openCommentModal() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return FractionallySizedBox(
-          heightFactor: 0.9,
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[400],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Comments',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Expanded(
-                child: Center(
-                  child: Text(
-                    'Comments list goes here',
-                    style: GoogleFonts.inter(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     int totalReactions = currentReactions.isNotEmpty
@@ -392,9 +348,9 @@ class _ConfessionCardState extends State<ConfessionCard> {
                     ],
                   ),
                 ),
-                GestureDetector(
+                InkWell(
                   onTap: () {
-                    showCommentsModal(context);
+                    showCommentsModal(context, widget.confessionId);
                   },
                   child: _buildActionIcon(Icons.chat_bubble_outline, 'Comment'),
                 ),

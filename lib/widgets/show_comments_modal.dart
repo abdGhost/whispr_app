@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-void showCommentsModal(BuildContext context) {
+void showCommentsModal(BuildContext context, String confessionId) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -11,113 +13,169 @@ void showCommentsModal(BuildContext context) {
     builder: (context) {
       return FractionallySizedBox(
         heightFactor: 0.9,
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Header with dropdown
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Text(
-                    'Most relevant',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Icon(Icons.arrow_drop_down),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Divider(thickness: 0.6, height: 1),
-
-            // Comments list
-            Expanded(
-              child: ListView.builder(
-                itemCount: 4,
-                itemBuilder: (context, index) {
-                  return _buildCommentItem(
-                    context: context,
-                    name: 'Shubham Kumar Singh',
-                    title: 'Territory Sales Manager | I&B Crystal Cro...',
-                    time: '1h',
-                    text: index == 0 ? 'Right sir 👍' : 'Great perspective 💯',
-                    hasReplies:
-                        index == 0, // example: first comment has replies
-                  );
-                },
-              ),
-            ),
-
-            const Divider(thickness: 0.6, height: 1),
-
-            // Quick reply chips
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildQuickReplyChip('Love this take, Ankur'),
-                    _buildQuickReplyChip('Thanks for sharing'),
-                  ],
-                ),
-              ),
-            ),
-
-            // Add comment bar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              child: Row(
-                children: [
-                  const CircleAvatar(
-                    radius: 18,
-                    backgroundImage: NetworkImage(
-                      'https://i.pravatar.cc/150?u=user',
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Add a comment...',
-                        hintStyle: GoogleFonts.inter(fontSize: 14),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(25),
-                          borderSide: const BorderSide(color: Colors.grey),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.send, color: Colors.blue),
-                    onPressed: () {},
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        child: CommentsModalContent(confessionId: confessionId),
       );
     },
   );
+}
+
+class CommentsModalContent extends StatefulWidget {
+  final String confessionId;
+  const CommentsModalContent({super.key, required this.confessionId});
+
+  @override
+  State<CommentsModalContent> createState() => _CommentsModalContentState();
+}
+
+class _CommentsModalContentState extends State<CommentsModalContent> {
+  bool isLoading = true;
+  List comments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    fetchComments();
+  }
+
+  Future<void> fetchComments() async {
+    final url = Uri.parse(
+      'https://whisper-2nhg.onrender.com/api/comment/confession/${widget.confessionId}?page=1&size=10',
+    );
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          comments = data['comments'];
+          isLoading = false;
+        });
+      } else {
+        print('Failed to fetch comments: ${response.body}');
+        setState(() => isLoading = false);
+      }
+    } catch (e) {
+      print('Error fetching comments: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Colors.grey[400],
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Header
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Text(
+                'Most relevant',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Icon(Icons.arrow_drop_down),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Divider(thickness: 0.6, height: 1),
+
+        // Comments list or loader
+        Expanded(
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : comments.isEmpty
+              ? Center(
+                  child: Text(
+                    'No comments yet',
+                    style: GoogleFonts.inter(fontSize: 14),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: comments.length,
+                  itemBuilder: (context, index) {
+                    final comment = comments[index];
+                    return _buildCommentItem(
+                      context: context,
+                      name: comment['username'] ?? 'Anonymous',
+                      title: comment['title'] ?? '',
+                      time: comment['timeAgo'] ?? '',
+                      text: comment['commentText'] ?? '',
+                    );
+                  },
+                ),
+        ),
+
+        const Divider(thickness: 0.6, height: 1),
+
+        // Quick reply chips
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildQuickReplyChip('Love this take'),
+                _buildQuickReplyChip('Thanks for sharing'),
+              ],
+            ),
+          ),
+        ),
+
+        // Add comment bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          child: Row(
+            children: [
+              const CircleAvatar(
+                radius: 18,
+                backgroundImage: NetworkImage(
+                  'https://i.pravatar.cc/150?u=user',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Add a comment...',
+                    hintStyle: GoogleFonts.inter(fontSize: 14),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(25),
+                      borderSide: const BorderSide(color: Colors.grey),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.send, color: Colors.blue),
+                onPressed: () {},
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 Widget _buildCommentItem({
@@ -126,7 +184,6 @@ Widget _buildCommentItem({
   required String title,
   required String time,
   required String text,
-  bool hasReplies = false,
 }) {
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -154,14 +211,6 @@ Widget _buildCommentItem({
                             fontWeight: FontWeight.w600,
                           ),
                           overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '• 3rd+',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: Colors.grey[600],
                         ),
                       ),
                       const SizedBox(width: 4),
@@ -204,7 +253,6 @@ Widget _buildCommentItem({
               const SizedBox(width: 16),
               GestureDetector(
                 onTap: () {
-                  // Handle reply click
                   print('Reply clicked for $name');
                 },
                 child: Text(
@@ -218,112 +266,8 @@ Widget _buildCommentItem({
             ],
           ),
         ),
-        // Nested replies placeholder
-        if (hasReplies)
-          Padding(
-            padding: const EdgeInsets.only(left: 48, top: 8),
-            child: Column(
-              children: [
-                _buildReplyItem(
-                  name: 'Abdul Taher Khan',
-                  title: 'Flutter Developer at Elite Back...',
-                  time: 'now',
-                  text: name, // replying to main commenter
-                ),
-              ],
-            ),
-          ),
       ],
     ),
-  );
-}
-
-Widget _buildReplyItem({
-  required String name,
-  required String title,
-  required String time,
-  required String text,
-}) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          const CircleAvatar(
-            radius: 18,
-            backgroundImage: NetworkImage('https://i.pravatar.cc/150?u=user2'),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        name,
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '• You',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      time,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const Icon(Icons.more_vert, color: Colors.grey),
-        ],
-      ),
-      const SizedBox(height: 4),
-      Padding(
-        padding: const EdgeInsets.only(left: 48),
-        child: Text(text, style: GoogleFonts.inter(fontSize: 14)),
-      ),
-      Padding(
-        padding: const EdgeInsets.only(left: 48, top: 4),
-        child: Row(
-          children: [
-            Text(
-              'Like',
-              style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600]),
-            ),
-            const SizedBox(width: 16),
-            Text(
-              'Reply',
-              style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      ),
-    ],
   );
 }
 
@@ -332,12 +276,9 @@ Widget _buildQuickReplyChip(String label) {
     margin: const EdgeInsets.only(right: 8),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     decoration: BoxDecoration(
-      color: Colors.transparent, // no fill color
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(25),
-      border: Border.all(
-        color: Colors.grey[300]!, // light grey border
-        width: 1,
-      ),
+      border: Border.all(color: Colors.grey[300]!, width: 1),
     ),
     child: Text(
       label,

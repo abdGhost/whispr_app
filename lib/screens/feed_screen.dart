@@ -30,7 +30,7 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> {
   int selectedTabIndex = 0;
   List<Category> categories = [];
-  late Future<List<Confession>> confessionsFuture;
+  Future<List<Confession>>? confessionsFuture;
   String userId = '';
 
   @override
@@ -47,9 +47,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Future<void> _loadUserId() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      userId = prefs.getString('userId') ?? '';
-    });
+    userId = prefs.getString('userId') ?? '';
   }
 
   Future<void> _fetchCategories() async {
@@ -68,7 +66,7 @@ class _FeedScreenState extends State<FeedScreen> {
           ];
         });
       } else {
-        throw Exception('Failed to load categories');
+        print('Failed to load categories');
       }
     } catch (e) {
       print('Error fetching categories: $e');
@@ -148,50 +146,52 @@ class _FeedScreenState extends State<FeedScreen> {
 
           // Feed List
           Expanded(
-            child: FutureBuilder<List<Confession>>(
-              future: confessionsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                } else if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      'Error: ${snapshot.error}',
-                      style: GoogleFonts.inter(),
-                    ),
-                  );
-                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No Confessions Found',
-                      style: GoogleFonts.inter(),
-                    ),
-                  );
-                } else {
-                  final confessionList = snapshot.data!;
-                  return ListView.builder(
-                    itemCount: confessionList.length,
-                    itemBuilder: (context, index) {
-                      final c = confessionList[index];
-                      return Container(
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        child: ConfessionCard(
-                          username: c.username,
-                          timeAgo: formatTimestamp(c.timestamp),
-                          location: c.address,
-                          confession: c.text,
-                          upvotes: c.upvotes,
-                          comments: c.commentsCount,
-                          reactionCounts: c.reactions,
-                          confessionId: c.id,
-                          userId: userId,
-                        ),
-                      );
+            child: confessionsFuture == null
+                ? const Center(child: CircularProgressIndicator())
+                : FutureBuilder<List<Confession>>(
+                    future: confessionsFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      } else if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Error: ${snapshot.error}',
+                            style: GoogleFonts.inter(),
+                          ),
+                        );
+                      } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return Center(
+                          child: Text(
+                            'No Confessions Found',
+                            style: GoogleFonts.inter(),
+                          ),
+                        );
+                      } else {
+                        final confessionList = snapshot.data!;
+                        return ListView.builder(
+                          itemCount: confessionList.length,
+                          itemBuilder: (context, index) {
+                            final c = confessionList[index];
+                            return Container(
+                              margin: const EdgeInsets.symmetric(vertical: 8),
+                              child: ConfessionCard(
+                                username: c.username,
+                                timeAgo: formatTimestamp(c.timestamp),
+                                location: c.address,
+                                confession: c.text,
+                                upvotes: c.upvotes,
+                                comments: c.commentsCount,
+                                reactionCounts: c.reactions,
+                                confessionId: c.id,
+                                userId: userId,
+                              ),
+                            );
+                          },
+                        );
+                      }
                     },
-                  );
-                }
-              },
-            ),
+                  ),
           ),
         ],
       ),
