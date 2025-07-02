@@ -1,14 +1,24 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+
 import 'package:whispr_app/api/api_services.dart';
 import 'package:whispr_app/helper/format_timestamp.dart';
 import 'package:whispr_app/models/confession_model.dart';
-
-import 'package:http/http.dart' as http;
 import 'package:whispr_app/widgets/confession_card.dart';
+
+class Category {
+  final String id;
+  final String name;
+
+  Category({required this.id, required this.name});
+
+  factory Category.fromJson(Map<String, dynamic> json) {
+    return Category(id: json['_id'], name: json['name']);
+  }
+}
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
@@ -19,16 +29,20 @@ class FeedScreen extends StatefulWidget {
 
 class _FeedScreenState extends State<FeedScreen> {
   int selectedTabIndex = 0;
-  List<String> tabs = ['All'];
+  List<Category> categories = [];
   late Future<List<Confession>> confessionsFuture;
   String userId = '';
 
   @override
   void initState() {
     super.initState();
-    _loadUserId();
-    _fetchCategories();
-    confessionsFuture = ApiServices().getAllConfession(userId);
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    await _loadUserId();
+    await _fetchCategories();
+    _fetchConfessions(); // initial load for 'All'
   }
 
   Future<void> _loadUserId() async {
@@ -48,7 +62,10 @@ class _FeedScreenState extends State<FeedScreen> {
       if (response.statusCode == 200) {
         final List data = json.decode(response.body);
         setState(() {
-          tabs = ['All'] + data.map((e) => e['name'].toString()).toList();
+          categories = [
+            Category(id: 'all', name: 'All'),
+            ...data.map((e) => Category.fromJson(e)).toList(),
+          ];
         });
       } else {
         throw Exception('Failed to load categories');
@@ -58,23 +75,26 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  void _onTabSelected(int index) {
+  void _fetchConfessions({String? categoryId}) {
     setState(() {
-      selectedTabIndex = index;
-      final selectedTab = tabs[index];
-
-      if (selectedTab == 'All') {
+      if (categoryId == null || categoryId == 'all') {
         confessionsFuture = ApiServices().getAllConfession(userId);
       } else {
         confessionsFuture = ApiServices().getConfessionByCategory(
-          capitalize(selectedTab),
-          userId,
+          categoryId: categoryId,
+          userId: userId,
         );
       }
     });
   }
 
-  String capitalize(String s) => s[0].toUpperCase() + s.substring(1);
+  void _onTabSelected(int index) {
+    setState(() {
+      selectedTabIndex = index;
+    });
+    final selectedCategory = categories[index];
+    _fetchConfessions(categoryId: selectedCategory.id);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,31 +103,37 @@ class _FeedScreenState extends State<FeedScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Tabs
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
             child: Row(
-              children: tabs.asMap().entries.map((entry) {
+              children: categories.asMap().entries.map((entry) {
                 int idx = entry.key;
-                String tab = entry.value;
-                final isSelected = selectedTabIndex == idx;
+                Category category = entry.value;
+                bool isSelected = selectedTabIndex == idx;
 
                 return GestureDetector(
                   onTap: () => _onTabSelected(idx),
                   child: Container(
-                    margin: EdgeInsets.only(right: 4),
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    margin: const EdgeInsets.only(right: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
-                      color: isSelected ? Color(0xFF6C5CE7) : Colors.white,
+                      color: isSelected
+                          ? const Color(0xFF6C5CE7)
+                          : Colors.white,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isSelected
-                            ? Color(0xFF6C5CE7)
+                            ? const Color(0xFF6C5CE7)
                             : Colors.grey[300]!,
                       ),
                     ),
                     child: Text(
-                      tab,
+                      category.name,
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -120,9 +146,9 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
           ),
 
-          // FEED List
+          // Feed List
           Expanded(
-            child: FutureBuilder(
+            child: FutureBuilder<List<Confession>>(
               future: confessionsFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -142,11 +168,11 @@ class _FeedScreenState extends State<FeedScreen> {
                     ),
                   );
                 } else {
-                  final confession = snapshot.data!;
-
+                  final confessionList = snapshot.data!;
                   return ListView.builder(
+                    itemCount: confessionList.length,
                     itemBuilder: (context, index) {
-                      final c = confession[index];
+                      final c = confessionList[index];
                       return Container(
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         child: ConfessionCard(

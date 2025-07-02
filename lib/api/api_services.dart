@@ -5,6 +5,7 @@ import 'package:whispr_app/models/confession_model.dart';
 class ApiServices {
   final String baseUrl = 'https://whisper-2nhg.onrender.com/api';
 
+  /// Register new user on app start
   Future<Map<String, dynamic>?> registerOnAppStart() async {
     final url = Uri.parse('$baseUrl/auth/register');
 
@@ -30,6 +31,7 @@ class ApiServices {
     }
   }
 
+  /// Get all confessions for a user
   Future<List<Confession>> getAllConfession(String userId) async {
     final url = Uri.parse('$baseUrl/confessions?userId=$userId');
 
@@ -50,11 +52,14 @@ class ApiServices {
     }
   }
 
-  Future<List<Confession>> getConfessionByCategory(
-    String category,
-    String userId,
-  ) async {
-    final url = Uri.parse('$baseUrl/confessions?category=$category?');
+  /// Get confessions by categoryId for a user
+  Future<List<Confession>> getConfessionByCategory({
+    required String categoryId,
+    required String userId,
+  }) async {
+    final url = Uri.parse(
+      '$baseUrl/confessions?userId=$userId&categoryId=$categoryId',
+    );
 
     try {
       print('🔗 Get Confession By Category URL: $url');
