@@ -40,13 +40,13 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
   String? userReaction;
   Map<String, int> currentReactions = {};
-  int commentsCount = 0; // New state variable for comments count
+  int commentsCount = 0;
 
   @override
   void initState() {
     super.initState();
     currentReactions = Map<String, int>.from(widget.reactionCounts ?? {});
-    commentsCount = widget.comments; // Initialize comments count
+    commentsCount = widget.comments;
 
     if (widget.isReact) {
       currentReactions.forEach((emoji, count) {
@@ -55,10 +55,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
         }
       });
     }
-
-    print(
-      '🔰 initState: userReaction=$userReaction currentReactions=$currentReactions commentsCount=$commentsCount',
-    );
   }
 
   Future<void> _submitReaction(String emoji) async {
@@ -72,8 +68,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
       'emoji': emoji,
     };
 
-    print('📡 Submitting reaction to $url with body: $body');
-
     try {
       final response = await http.post(
         url,
@@ -81,40 +75,27 @@ class _ConfessionCardState extends State<ConfessionCard> {
         body: jsonEncode(body),
       );
 
-      print('🔗 Response status: ${response.statusCode}');
-      print('🔗 Response body: ${response.body}');
-
       if (response.statusCode == 200 || response.statusCode == 201) {
         setState(() {
-          if (emoji == '') {
-            // Removing reaction
-            if (userReaction != null &&
-                currentReactions.containsKey(userReaction!)) {
-              currentReactions[userReaction!] =
-                  currentReactions[userReaction!]! - 1;
-              if (currentReactions[userReaction!] == 0) {
-                currentReactions.remove(userReaction!);
-              }
+          // Remove existing reaction count if any
+          if (userReaction != null &&
+              currentReactions.containsKey(userReaction!)) {
+            currentReactions[userReaction!] =
+                currentReactions[userReaction!]! - 1;
+            if (currentReactions[userReaction!] == 0) {
+              currentReactions.remove(userReaction!);
             }
+          }
+
+          if (emoji == '') {
+            // Remove user reaction
             userReaction = null;
           } else {
-            // Adding or changing reaction
-            if (userReaction != null &&
-                currentReactions.containsKey(userReaction!)) {
-              currentReactions[userReaction!] =
-                  currentReactions[userReaction!]! - 1;
-              if (currentReactions[userReaction!] == 0) {
-                currentReactions.remove(userReaction!);
-              }
-            }
+            // Update new reaction
             currentReactions.update(emoji, (v) => v + 1, ifAbsent: () => 1);
             userReaction = emoji;
           }
         });
-
-        print('✅ Reaction updated successfully. userReaction=$userReaction');
-      } else {
-        print('❌ Failed to submit reaction: ${response.body}');
       }
     } catch (e) {
       print('❌ Error submitting reaction: $e');
@@ -123,21 +104,16 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
   void _reactConfession(String emoji) async {
     _removeOverlay();
-
-    if (userReaction == emoji) {
-      await _submitReaction('');
-    } else {
-      await _submitReaction(emoji);
-    }
+    await _submitReaction(emoji);
   }
 
   void _likeConfession() async {
-    print('👍 Like button tapped');
-
-    if (userReaction == '👍') {
-      await _submitReaction('');
-    } else {
+    if (userReaction == null) {
+      // No reaction yet → send 👍
       await _submitReaction('👍');
+    } else {
+      // Any reaction active → remove
+      await _submitReaction('');
     }
   }
 
@@ -213,10 +189,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
   @override
   Widget build(BuildContext context) {
-    int totalReactions = currentReactions.isNotEmpty
-        ? currentReactions.values.reduce((a, b) => a + b)
-        : 0;
-
     List<String> reactionEmojis = currentReactions.entries
         .where((entry) => entry.value > 0)
         .map((entry) => entry.key)
@@ -225,10 +197,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
     if (userReaction != null && !reactionEmojis.contains(userReaction)) {
       reactionEmojis.add(userReaction!);
     }
-
-    bool showOnlyLike =
-        (reactionEmojis.isEmpty && widget.upvotes > 0) ||
-        (reactionEmojis.length == 1 && reactionEmojis.contains('👍'));
 
     return Container(
       width: double.infinity,
@@ -240,6 +208,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
@@ -274,6 +243,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
               ],
             ),
           ),
+          // Confession text
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
@@ -281,98 +251,81 @@ class _ConfessionCardState extends State<ConfessionCard> {
               style: GoogleFonts.inter(fontSize: 14, color: Colors.black87),
             ),
           ),
-          if (totalReactions > 0 || widget.upvotes > 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  if (!showOnlyLike && reactionEmojis.isNotEmpty)
-                    Wrap(
-                      spacing: -8,
-                      children: reactionEmojis.map((emoji) {
-                        bool isUserReacted = (userReaction == emoji);
-                        return Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            emoji,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: isUserReacted ? Colors.blue : Colors.black,
+          // Reactions and comments row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                if (reactionEmojis.isNotEmpty)
+                  Wrap(
+                    spacing: 12,
+                    children: reactionEmojis.map((emoji) {
+                      int count = currentReactions[emoji] ?? 0;
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(emoji, style: const TextStyle(fontSize: 16)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$count',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.grey[800],
                             ),
                           ),
-                        );
-                      }).toList(),
-                    ),
-                  if (showOnlyLike)
-                    Icon(Icons.thumb_up_alt, size: 16, color: Colors.blue),
-                  const SizedBox(width: 8),
+                        ],
+                      );
+                    }).toList(),
+                  )
+                else
                   Text(
-                    '${widget.upvotes > 0 ? widget.upvotes : totalReactions}',
+                    'No reactions yet',
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: Colors.grey[800],
                     ),
                   ),
-                  const Spacer(),
-                  Text(
-                    '$commentsCount comments', // use state variable
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                const Spacer(),
+                Text(
+                  '$commentsCount comments',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.grey[600],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
           const Divider(thickness: 0.4),
+          // Action bar
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                GestureDetector(
-                  onTap: _likeConfession,
+                _buildActionIcon(
+                  userReaction == '👍'
+                      ? Icons.thumb_up_alt
+                      : Icons.thumb_up_alt_outlined,
+                  'Like',
+                  _likeConfession,
                   onLongPress: () => _showReactionOverlay(context),
-                  child: Row(
-                    children: [
-                      Icon(
-                        userReaction == '👍'
-                            ? Icons.thumb_up_alt
-                            : Icons.thumb_up_alt_outlined,
-                        size: 20,
-                        color: userReaction == '👍'
-                            ? Colors.blue
-                            : Colors.grey[800],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Like',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: userReaction == '👍'
-                              ? Colors.blue
-                              : Colors.grey[800],
-                        ),
-                      ),
-                    ],
-                  ),
+                  iconColor: userReaction != null
+                      ? Colors.blue
+                      : Colors.grey[800]!,
+                  textColor: userReaction != null
+                      ? Colors.blue
+                      : Colors.grey[800]!,
                 ),
-                InkWell(
-                  onTap: () {
-                    showCommentsModal(
-                      context,
-                      widget.confessionId,
-                      onNewComment: _incrementCommentsCount, // Pass callback
-                    );
-                  },
-                  child: _buildActionIcon(Icons.chat_bubble_outline, 'Comment'),
-                ),
-                _buildActionIcon(Icons.share_outlined, 'Share'),
-                _buildActionIcon(Icons.send_outlined, 'Send'),
+                _buildActionIcon(Icons.chat_bubble_outline, 'Comment', () {
+                  showCommentsModal(
+                    context,
+                    widget.confessionId,
+                    onNewComment: _incrementCommentsCount,
+                  );
+                }),
+                _buildActionIcon(Icons.share_outlined, 'Share', () {}),
+                _buildActionIcon(Icons.send_outlined, 'Send', () {}),
               ],
             ),
           ),
@@ -381,16 +334,24 @@ class _ConfessionCardState extends State<ConfessionCard> {
     );
   }
 
-  Widget _buildActionIcon(IconData icon, String label) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: Colors.grey[800]),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[800]),
-        ),
-      ],
+  Widget _buildActionIcon(
+    IconData icon,
+    String label,
+    VoidCallback onTap, {
+    VoidCallback? onLongPress,
+    Color iconColor = const Color(0xFF424242),
+    Color textColor = const Color(0xFF424242),
+  }) {
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: iconColor),
+          const SizedBox(width: 4),
+          Text(label, style: GoogleFonts.inter(fontSize: 12, color: textColor)),
+        ],
+      ),
     );
   }
 }
