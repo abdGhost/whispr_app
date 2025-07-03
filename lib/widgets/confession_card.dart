@@ -77,7 +77,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         setState(() {
-          // Remove existing reaction count if any
           if (userReaction != null &&
               currentReactions.containsKey(userReaction!)) {
             currentReactions[userReaction!] =
@@ -88,10 +87,8 @@ class _ConfessionCardState extends State<ConfessionCard> {
           }
 
           if (emoji == '') {
-            // Remove user reaction
             userReaction = null;
           } else {
-            // Update new reaction
             currentReactions.update(emoji, (v) => v + 1, ifAbsent: () => 1);
             userReaction = emoji;
           }
@@ -109,10 +106,8 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
   void _likeConfession() async {
     if (userReaction == null) {
-      // No reaction yet → send 👍
       await _submitReaction('👍');
     } else {
-      // Any reaction active → remove
       await _submitReaction('');
     }
   }
@@ -303,19 +298,32 @@ class _ConfessionCardState extends State<ConfessionCard> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildActionIcon(
-                  userReaction == '👍'
-                      ? Icons.thumb_up_alt
-                      : Icons.thumb_up_alt_outlined,
-                  'Like',
-                  _likeConfession,
+                InkWell(
+                  onTap: _likeConfession,
                   onLongPress: () => _showReactionOverlay(context),
-                  iconColor: userReaction != null
-                      ? Colors.blue
-                      : Colors.grey[800]!,
-                  textColor: userReaction != null
-                      ? Colors.blue
-                      : Colors.grey[800]!,
+                  child: Row(
+                    children: [
+                      Icon(
+                        userReaction != null
+                            ? Icons.thumb_up_alt
+                            : Icons.thumb_up_alt_outlined,
+                        size: 20,
+                        color: userReaction != null
+                            ? Colors.blue
+                            : Colors.grey[800],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Like',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: userReaction != null
+                              ? Colors.blue
+                              : Colors.grey[800],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 _buildActionIcon(Icons.chat_bubble_outline, 'Comment', () {
                   showCommentsModal(
