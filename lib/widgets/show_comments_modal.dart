@@ -76,11 +76,33 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     socket.on('commentAdded', (data) {
       print('[Socket] Received comments: $data');
       if (!mounted) return;
+
       setState(() {
-        if (data is List) {
-          comments = List<Map<String, dynamic>>.from(data);
-        } else if (data is Map) {
-          comments.insert(0, Map<String, dynamic>.from(data));
+        if (data is Map) {
+          String newId = data['_id'];
+          bool alreadyExists = comments.any((c) => c['_id'] == newId);
+          if (!alreadyExists) {
+            Map<String, dynamic> newComment = Map<String, dynamic>.from(data);
+
+            // Patch quotedCommentId to Map for replies
+            if (newComment['quotedCommentId'] != null &&
+                newComment['quotedCommentId'] is String) {
+              final parentId = newComment['quotedCommentId'];
+              final parentComment = comments.firstWhere(
+                (c) => c['_id'] == parentId,
+                orElse: () => {},
+              );
+              if (parentComment.isNotEmpty) {
+                newComment['quotedCommentId'] = {
+                  "_id": parentId,
+                  "username": parentComment['username'] ?? 'Anonymous',
+                  "text": parentComment['text'] ?? '',
+                };
+              }
+            }
+
+            comments.add(newComment);
+          }
         }
         isLoading = false;
       });
@@ -90,7 +112,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
   }
 
   Future<void> fetchComments() async {
-    // print('[fetchComments] API call started');
     setState(() => isLoading = true);
     final url = Uri.parse(
       'https://whisper-2nhg.onrender.com/api/comment/confession/${widget.confessionId}',
@@ -98,11 +119,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
 
     try {
       final response = await http.get(url);
-      final formattedJson = const JsonEncoder.withIndent(
-        '  ',
-      ).convert(jsonDecode(response.body));
-      // print('[fetchComments] Full response:\n$formattedJson');
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
@@ -110,11 +126,9 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           isLoading = false;
         });
       } else {
-        // print('[fetchComments] Failed: ${response.body}');
         setState(() => isLoading = false);
       }
     } catch (e) {
-      // print('[fetchComments] Error: $e');
       setState(() => isLoading = false);
     }
   }
@@ -123,7 +137,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     final text = _commentController.text.trim();
     if (text.isEmpty || userId.isEmpty) return;
 
-    // print('[postComment] Posting comment: $text');
     setState(() => isPosting = true);
 
     final url = Uri.parse('https://whisper-2nhg.onrender.com/api/comment/add');
@@ -142,11 +155,9 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
         body: jsonEncode(body),
       );
 
-      // print('[postComment] Status: ${response.statusCode}');
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final newComment = Map<String, dynamic>.from(data['comment']);
-        // print('[postComment] Added comment ID: ${newComment['_id']}');
 
         // Patch quotedCommentId for local UI nesting
         if (newComment['quotedCommentId'] != null &&
@@ -172,15 +183,12 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
         });
 
         setState(() {
-          comments.insert(0, newComment);
           _commentController.clear();
           quotedCommentId = null;
         });
-      } else {
-        // print('[postComment] Failed: ${response.body}');
       }
     } catch (e) {
-      // print('[postComment] Error: $e');
+      // Handle error silently for now
     } finally {
       setState(() => isPosting = false);
     }
@@ -403,7 +411,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
