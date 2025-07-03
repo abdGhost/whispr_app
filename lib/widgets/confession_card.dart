@@ -59,19 +59,15 @@ class _ConfessionCardState extends State<ConfessionCard> {
     );
   }
 
-  Future<void> _submitReaction() async {
-    if (userReaction == null || userReaction == '') {
-      print('ℹ️ No reaction to submit');
-      return;
-    }
-
+  Future<void> _submitReaction(String emoji) async {
     final url = Uri.parse(
-      'https://whisper-2nhg.onrender.com/api/confessions/react',
+      'https://whisper-2nhg.onrender.com/api/comment/react',
     );
+
     final body = {
-      'confessionId': widget.confessionId,
+      'commentId': widget.confessionId,
       'userId': widget.userId,
-      'emoji': userReaction!,
+      'emoji': emoji,
     };
 
     print('📡 Submitting reaction to $url with body: $body');
@@ -86,15 +82,35 @@ class _ConfessionCardState extends State<ConfessionCard> {
       print('🔗 Response status: ${response.statusCode}');
       print('🔗 Response body: ${response.body}');
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final updatedEmoji = data['reaction']['emoji'];
-
+      if (response.statusCode == 200 || response.statusCode == 201) {
         setState(() {
-          userReaction = updatedEmoji;
+          if (emoji == '') {
+            // Removing reaction
+            if (userReaction != null &&
+                currentReactions.containsKey(userReaction!)) {
+              currentReactions[userReaction!] =
+                  currentReactions[userReaction!]! - 1;
+              if (currentReactions[userReaction!] == 0) {
+                currentReactions.remove(userReaction!);
+              }
+            }
+            userReaction = null;
+          } else {
+            // Adding or changing reaction
+            if (userReaction != null &&
+                currentReactions.containsKey(userReaction!)) {
+              currentReactions[userReaction!] =
+                  currentReactions[userReaction!]! - 1;
+              if (currentReactions[userReaction!] == 0) {
+                currentReactions.remove(userReaction!);
+              }
+            }
+            currentReactions.update(emoji, (v) => v + 1, ifAbsent: () => 1);
+            userReaction = emoji;
+          }
         });
 
-        print('✅ Reaction updated. New userReaction=$userReaction');
+        print('✅ Reaction updated successfully. userReaction=$userReaction');
       } else {
         print('❌ Failed to submit reaction: ${response.body}');
       }
@@ -105,39 +121,23 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
   void _reactConfession(String emoji) async {
     _removeOverlay();
-    print('👉 Reacting with emoji: $emoji');
 
-    setState(() {
-      if (userReaction != null && currentReactions.containsKey(userReaction!)) {
-        currentReactions[userReaction!] = currentReactions[userReaction!]! - 1;
-        if (currentReactions[userReaction!] == 0) {
-          currentReactions.remove(userReaction!);
-        }
-      }
-
-      currentReactions.update(emoji, (value) => value + 1, ifAbsent: () => 1);
-      userReaction = emoji;
-    });
-
-    await _submitReaction();
+    // If user taps the same emoji again, send empty emoji to remove
+    if (userReaction == emoji) {
+      await _submitReaction('');
+    } else {
+      await _submitReaction(emoji);
+    }
   }
 
   void _likeConfession() async {
     print('👍 Like button tapped');
 
+    // If user already liked, send empty to unlike
     if (userReaction == '👍') {
-      setState(() {
-        if (currentReactions.containsKey('👍')) {
-          currentReactions['👍'] = currentReactions['👍']! - 1;
-          if (currentReactions['👍'] == 0) {
-            currentReactions.remove('👍');
-          }
-        }
-        userReaction = null;
-      });
-      await _submitReaction();
+      await _submitReaction('');
     } else {
-      _reactConfession('👍');
+      await _submitReaction('👍');
     }
   }
 
@@ -216,10 +216,14 @@ class _ConfessionCardState extends State<ConfessionCard> {
         .map((entry) => entry.key)
         .toList();
 
-    // 🔥 Ensure userReaction emoji is shown even if count is 0
     if (userReaction != null && !reactionEmojis.contains(userReaction)) {
       reactionEmojis.add(userReaction!);
     }
+
+    // Calculate showOnlyLike correctly
+    bool showOnlyLike =
+        (reactionEmojis.isEmpty && widget.upvotes > 0) ||
+        (reactionEmojis.length == 1 && reactionEmojis.contains('👍'));
 
     return Container(
       width: double.infinity,
@@ -265,7 +269,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
               ],
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
@@ -273,35 +276,37 @@ class _ConfessionCardState extends State<ConfessionCard> {
               style: GoogleFonts.inter(fontSize: 14, color: Colors.black87),
             ),
           ),
-
-          if (reactionEmojis.isNotEmpty)
+          if (totalReactions > 0 || widget.upvotes > 0)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  Wrap(
-                    spacing: -8,
-                    children: reactionEmojis.map((emoji) {
-                      bool isUserReacted = (userReaction == emoji);
-                      return Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          emoji,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: isUserReacted ? Colors.blue : Colors.black,
+                  if (!showOnlyLike && reactionEmojis.isNotEmpty)
+                    Wrap(
+                      spacing: -8,
+                      children: reactionEmojis.map((emoji) {
+                        bool isUserReacted = (userReaction == emoji);
+                        return Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
                           ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
+                          child: Text(
+                            emoji,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: isUserReacted ? Colors.blue : Colors.black,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  if (showOnlyLike)
+                    Icon(Icons.thumb_up_alt, size: 16, color: Colors.blue),
                   const SizedBox(width: 8),
                   Text(
-                    '$totalReactions',
+                    '${widget.upvotes > 0 ? widget.upvotes : totalReactions}',
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: Colors.grey[800],
@@ -318,9 +323,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
                 ],
               ),
             ),
-
           const Divider(thickness: 0.4),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Row(
