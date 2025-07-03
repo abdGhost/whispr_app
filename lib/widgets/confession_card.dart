@@ -40,11 +40,13 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
   String? userReaction;
   Map<String, int> currentReactions = {};
+  int commentsCount = 0; // New state variable for comments count
 
   @override
   void initState() {
     super.initState();
     currentReactions = Map<String, int>.from(widget.reactionCounts ?? {});
+    commentsCount = widget.comments; // Initialize comments count
 
     if (widget.isReact) {
       currentReactions.forEach((emoji, count) {
@@ -55,7 +57,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
     }
 
     print(
-      '🔰 initState: userReaction=$userReaction currentReactions=$currentReactions',
+      '🔰 initState: userReaction=$userReaction currentReactions=$currentReactions commentsCount=$commentsCount',
     );
   }
 
@@ -122,7 +124,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
   void _reactConfession(String emoji) async {
     _removeOverlay();
 
-    // If user taps the same emoji again, send empty emoji to remove
     if (userReaction == emoji) {
       await _submitReaction('');
     } else {
@@ -133,7 +134,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
   void _likeConfession() async {
     print('👍 Like button tapped');
 
-    // If user already liked, send empty to unlike
     if (userReaction == '👍') {
       await _submitReaction('');
     } else {
@@ -205,6 +205,12 @@ class _ConfessionCardState extends State<ConfessionCard> {
     _overlayEntry = null;
   }
 
+  void _incrementCommentsCount() {
+    setState(() {
+      commentsCount += 1;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     int totalReactions = currentReactions.isNotEmpty
@@ -220,7 +226,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
       reactionEmojis.add(userReaction!);
     }
 
-    // Calculate showOnlyLike correctly
     bool showOnlyLike =
         (reactionEmojis.isEmpty && widget.upvotes > 0) ||
         (reactionEmojis.length == 1 && reactionEmojis.contains('👍'));
@@ -314,7 +319,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
                   ),
                   const Spacer(),
                   Text(
-                    '${widget.comments} comments',
+                    '$commentsCount comments', // use state variable
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: Colors.grey[600],
@@ -358,7 +363,11 @@ class _ConfessionCardState extends State<ConfessionCard> {
                 ),
                 InkWell(
                   onTap: () {
-                    showCommentsModal(context, widget.confessionId);
+                    showCommentsModal(
+                      context,
+                      widget.confessionId,
+                      onNewComment: _incrementCommentsCount, // Pass callback
+                    );
                   },
                   child: _buildActionIcon(Icons.chat_bubble_outline, 'Comment'),
                 ),

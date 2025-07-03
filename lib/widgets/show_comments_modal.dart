@@ -5,7 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:convert';
 
-void showCommentsModal(BuildContext context, String confessionId) {
+void showCommentsModal(
+  BuildContext context,
+  String confessionId, {
+  VoidCallback? onNewComment,
+}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -15,7 +19,10 @@ void showCommentsModal(BuildContext context, String confessionId) {
     builder: (context) {
       return FractionallySizedBox(
         heightFactor: 0.9,
-        child: CommentsModalContent(confessionId: confessionId),
+        child: CommentsModalContent(
+          confessionId: confessionId,
+          onNewComment: onNewComment,
+        ),
       );
     },
   );
@@ -23,7 +30,13 @@ void showCommentsModal(BuildContext context, String confessionId) {
 
 class CommentsModalContent extends StatefulWidget {
   final String confessionId;
-  const CommentsModalContent({super.key, required this.confessionId});
+  final VoidCallback? onNewComment;
+
+  const CommentsModalContent({
+    super.key,
+    required this.confessionId,
+    this.onNewComment,
+  });
 
   @override
   State<CommentsModalContent> createState() => _CommentsModalContentState();
@@ -84,7 +97,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           if (!alreadyExists) {
             Map<String, dynamic> newComment = Map<String, dynamic>.from(data);
 
-            // Patch quotedCommentId to Map for replies
             if (newComment['quotedCommentId'] != null &&
                 newComment['quotedCommentId'] is String) {
               final parentId = newComment['quotedCommentId'];
@@ -159,7 +171,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
         final data = jsonDecode(response.body);
         final newComment = Map<String, dynamic>.from(data['comment']);
 
-        // Patch quotedCommentId for local UI nesting
         if (newComment['quotedCommentId'] != null &&
             newComment['quotedCommentId'] is String) {
           final parentId = newComment['quotedCommentId'];
@@ -176,11 +187,15 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           }
         }
 
-        // Emit to socket
         socket.emit('sendComment', {
           ...newComment,
           'confessionId': widget.confessionId,
         });
+
+        // ✅ Trigger onNewComment callback to update comment count in ConfessionCard
+        if (widget.onNewComment != null) {
+          widget.onNewComment!();
+        }
 
         setState(() {
           _commentController.clear();
@@ -188,7 +203,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
         });
       }
     } catch (e) {
-      // Handle error silently for now
+      // Handle error silently
     } finally {
       setState(() => isPosting = false);
     }
