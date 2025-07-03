@@ -15,7 +15,7 @@ class ConfessionCard extends StatefulWidget {
   final int upvotes;
   final int comments;
   final Map<String, int>? reactionCounts;
-  final bool isReact; // ✅ NEW
+  final bool isReact;
 
   const ConfessionCard({
     super.key,
@@ -28,7 +28,7 @@ class ConfessionCard extends StatefulWidget {
     required this.upvotes,
     required this.comments,
     this.reactionCounts,
-    this.isReact = false, // ✅ default false
+    this.isReact = false,
   });
 
   @override
@@ -38,7 +38,6 @@ class ConfessionCard extends StatefulWidget {
 class _ConfessionCardState extends State<ConfessionCard> {
   OverlayEntry? _overlayEntry;
 
-  bool isLiked = false;
   String? userReaction;
   Map<String, int> currentReactions = {};
 
@@ -47,113 +46,99 @@ class _ConfessionCardState extends State<ConfessionCard> {
     super.initState();
     currentReactions = Map<String, int>.from(widget.reactionCounts ?? {});
 
-    // ✅ initialize like/reaction based on isReact
     if (widget.isReact) {
-      if (currentReactions.containsKey('👍')) {
-        isLiked = true;
-      } else if (currentReactions.isNotEmpty) {
-        userReaction = currentReactions.keys.first;
-      }
+      currentReactions.forEach((emoji, count) {
+        if (count > 0 && userReaction == null) {
+          userReaction = emoji;
+        }
+      });
     }
-  }
 
-  @override
-  void dispose() {
-    _submitReaction();
-    super.dispose();
+    print(
+      '🔰 initState: userReaction=$userReaction currentReactions=$currentReactions',
+    );
   }
 
   Future<void> _submitReaction() async {
-    String? emoji;
-    if (isLiked) emoji = '👍';
-    if (userReaction != null) emoji = userReaction;
-
-    if (emoji != null) {
-      final url = Uri.parse(
-        'https://whisper-2nhg.onrender.com/api/confessions/react',
-      );
-      final body = {
-        'confessionId': widget.confessionId,
-        'userId': widget.userId,
-        'emoji': emoji,
-      };
-      try {
-        final response = await http.post(
-          url,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(body),
-        );
-        if (response.statusCode == 200) {
-          print('Reaction submitted successfully');
-        } else {
-          print('Failed to submit reaction: ${response.body}');
-        }
-      } catch (e) {
-        print('Error submitting reaction: $e');
-      }
+    if (userReaction == null || userReaction == '') {
+      print('ℹ️ No reaction to submit');
+      return;
     }
-  }
 
-  void _likeConfession() async {
-    _removeOverlay();
-    setState(() {
-      if (isLiked) {
-        String emoji = '👍';
-        if (currentReactions.containsKey(emoji)) {
-          currentReactions[emoji] = currentReactions[emoji]! - 1;
-          if (currentReactions[emoji] == 0) currentReactions.remove(emoji);
-        }
-        isLiked = false;
+    final url = Uri.parse(
+      'https://whisper-2nhg.onrender.com/api/confessions/react',
+    );
+    final body = {
+      'confessionId': widget.confessionId,
+      'userId': widget.userId,
+      'emoji': userReaction!,
+    };
+
+    print('📡 Submitting reaction to $url with body: $body');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      print('🔗 Response status: ${response.statusCode}');
+      print('🔗 Response body: ${response.body}');
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final updatedEmoji = data['reaction']['emoji'];
+
+        setState(() {
+          userReaction = updatedEmoji;
+        });
+
+        print('✅ Reaction updated. New userReaction=$userReaction');
       } else {
-        if (userReaction != null) {
-          if (currentReactions.containsKey(userReaction!)) {
-            currentReactions[userReaction!] =
-                currentReactions[userReaction!]! - 1;
-            if (currentReactions[userReaction!] == 0)
-              currentReactions.remove(userReaction!);
-          }
-          userReaction = null;
-        }
-        String emoji = '👍';
-        currentReactions.update(emoji, (value) => value + 1, ifAbsent: () => 1);
-        isLiked = true;
+        print('❌ Failed to submit reaction: ${response.body}');
       }
-    });
-    await _submitReaction();
+    } catch (e) {
+      print('❌ Error submitting reaction: $e');
+    }
   }
 
   void _reactConfession(String emoji) async {
     _removeOverlay();
+    print('👉 Reacting with emoji: $emoji');
+
     setState(() {
-      if (userReaction == emoji) {
-        if (currentReactions.containsKey(emoji)) {
-          currentReactions[emoji] = currentReactions[emoji]! - 1;
-          if (currentReactions[emoji] == 0) currentReactions.remove(emoji);
+      if (userReaction != null && currentReactions.containsKey(userReaction!)) {
+        currentReactions[userReaction!] = currentReactions[userReaction!]! - 1;
+        if (currentReactions[userReaction!] == 0) {
+          currentReactions.remove(userReaction!);
+        }
+      }
+
+      currentReactions.update(emoji, (value) => value + 1, ifAbsent: () => 1);
+      userReaction = emoji;
+    });
+
+    await _submitReaction();
+  }
+
+  void _likeConfession() async {
+    print('👍 Like button tapped');
+
+    if (userReaction == '👍') {
+      setState(() {
+        if (currentReactions.containsKey('👍')) {
+          currentReactions['👍'] = currentReactions['👍']! - 1;
+          if (currentReactions['👍'] == 0) {
+            currentReactions.remove('👍');
+          }
         }
         userReaction = null;
-      } else {
-        if (isLiked) {
-          String likeEmoji = '👍';
-          if (currentReactions.containsKey(likeEmoji)) {
-            currentReactions[likeEmoji] = currentReactions[likeEmoji]! - 1;
-            if (currentReactions[likeEmoji] == 0)
-              currentReactions.remove(likeEmoji);
-          }
-          isLiked = false;
-        }
-        if (userReaction != null && userReaction != emoji) {
-          if (currentReactions.containsKey(userReaction!)) {
-            currentReactions[userReaction!] =
-                currentReactions[userReaction!]! - 1;
-            if (currentReactions[userReaction!] == 0)
-              currentReactions.remove(userReaction!);
-          }
-        }
-        currentReactions.update(emoji, (value) => value + 1, ifAbsent: () => 1);
-        userReaction = emoji;
-      }
-    });
-    await _submitReaction();
+      });
+      await _submitReaction();
+    } else {
+      _reactConfession('👍');
+    }
   }
 
   void _showReactionOverlay(BuildContext context) {
@@ -189,7 +174,15 @@ class _ConfessionCardState extends State<ConfessionCard> {
                     onTap: () => _reactConfession(emoji),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                      child: Text(
+                        emoji,
+                        style: TextStyle(
+                          fontSize: 24,
+                          color: userReaction == emoji
+                              ? Colors.blue
+                              : Colors.black,
+                        ),
+                      ),
                     ),
                   );
                 }).toList(),
@@ -217,7 +210,16 @@ class _ConfessionCardState extends State<ConfessionCard> {
     int totalReactions = currentReactions.isNotEmpty
         ? currentReactions.values.reduce((a, b) => a + b)
         : 0;
-    List<String> reactionEmojis = currentReactions.keys.toList();
+
+    List<String> reactionEmojis = currentReactions.entries
+        .where((entry) => entry.value > 0)
+        .map((entry) => entry.key)
+        .toList();
+
+    // 🔥 Ensure userReaction emoji is shown even if count is 0
+    if (userReaction != null && !reactionEmojis.contains(userReaction)) {
+      reactionEmojis.add(userReaction!);
+    }
 
     return Container(
       width: double.infinity,
@@ -229,7 +231,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // User info row
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
@@ -265,7 +266,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
             ),
           ),
 
-          // Confession text
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
@@ -274,8 +274,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
             ),
           ),
 
-          // Reaction + Comment row
-          if (currentReactions.isNotEmpty)
+          if (reactionEmojis.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
@@ -283,6 +282,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
                   Wrap(
                     spacing: -8,
                     children: reactionEmojis.map((emoji) {
+                      bool isUserReacted = (userReaction == emoji);
                       return Container(
                         padding: const EdgeInsets.all(2),
                         decoration: const BoxDecoration(
@@ -291,7 +291,10 @@ class _ConfessionCardState extends State<ConfessionCard> {
                         ),
                         child: Text(
                           emoji,
-                          style: const TextStyle(fontSize: 16),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: isUserReacted ? Colors.blue : Colors.black,
+                          ),
                         ),
                       );
                     }).toList(),
@@ -318,7 +321,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
           const Divider(thickness: 0.4),
 
-          // Action bar
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Row(
@@ -330,18 +332,22 @@ class _ConfessionCardState extends State<ConfessionCard> {
                   child: Row(
                     children: [
                       Icon(
-                        isLiked
+                        userReaction == '👍'
                             ? Icons.thumb_up_alt
                             : Icons.thumb_up_alt_outlined,
                         size: 20,
-                        color: isLiked ? Colors.blue : Colors.grey[800],
+                        color: userReaction == '👍'
+                            ? Colors.blue
+                            : Colors.grey[800],
                       ),
                       const SizedBox(width: 4),
                       Text(
                         'Like',
                         style: GoogleFonts.inter(
                           fontSize: 12,
-                          color: isLiked ? Colors.blue : Colors.grey[800],
+                          color: userReaction == '👍'
+                              ? Colors.blue
+                              : Colors.grey[800],
                         ),
                       ),
                     ],

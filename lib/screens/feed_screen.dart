@@ -24,7 +24,7 @@ class FeedScreenState extends State<FeedScreen> {
   String userId = '';
 
   late IO.Socket socket;
-  bool isLoading = true; // 🔥 loading state
+  bool isLoading = true;
 
   @override
   void initState() {
@@ -53,7 +53,7 @@ class FeedScreenState extends State<FeedScreen> {
 
   Future<void> fetchConfessions({String? categoryId}) async {
     setState(() {
-      isLoading = true; // start loading
+      isLoading = true;
     });
 
     final selectedId = categoryId ?? widget.categories[selectedTabIndex].id;
@@ -71,7 +71,7 @@ class FeedScreenState extends State<FeedScreen> {
 
       setState(() {
         confessions = result;
-        isLoading = false; // loading done
+        isLoading = false;
       });
     } catch (e) {
       print('❌ Error fetching confessions: $e');
@@ -117,7 +117,7 @@ class FeedScreenState extends State<FeedScreen> {
           setState(() {
             confessions.insert(0, newConfession);
           });
-        } else {}
+        }
       } catch (e) {
         print('❌ Error parsing new confession: $e');
       }
@@ -139,12 +139,10 @@ class FeedScreenState extends State<FeedScreen> {
       selectedTabIndex = index;
     });
 
-    // Leave previous room if not 'All'
     if (prevCategoryId != 'all') {
       socket.emit('leaveConfessionCategory', {'categoryId': prevCategoryId});
     }
 
-    // Join new room if not 'All'
     if (newCategoryId != 'all') {
       socket.emit('joinConfessionCategory', {'categoryId': newCategoryId});
       print('👉 Joined category: $newCategoryId');
@@ -230,6 +228,7 @@ class FeedScreenState extends State<FeedScreen> {
                           reactionCounts: c.reactions,
                           confessionId: c.id,
                           userId: userId,
+                          isReact: c.isReact, // ✅ pass isReact safely
                         ),
                       );
                     },

@@ -9,6 +9,7 @@ class Confession {
   final String timestamp;
   final String username;
   final Map<String, int> reactions;
+  final bool isReact; // 🔧 NEW FIELD
 
   Confession({
     required this.id,
@@ -21,6 +22,7 @@ class Confession {
     required this.timestamp,
     required this.username,
     required this.reactions,
+    required this.isReact, // 🔧 NEW FIELD
   });
 
   factory Confession.fromJson(Map<String, dynamic> json) {
@@ -58,6 +60,7 @@ class Confession {
       reactions: json['reactions'] != null
           ? Map<String, int>.from(json['reactions'])
           : {},
+      isReact: json['isReact'] ?? false, // 🔧 parse isReact safely
     );
   }
 }
