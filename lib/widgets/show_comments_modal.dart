@@ -13,6 +13,7 @@ void showCommentsModal(
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
+    backgroundColor: Colors.white,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
@@ -53,6 +54,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
   String username = 'Anonymous';
   String userId = '';
   String? quotedCommentId;
+  String? quotedUsername;
 
   @override
   void initState() {
@@ -82,37 +84,14 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
       socket.emit('joinConfession', widget.confessionId);
     });
 
-    socket.on('joinConfession', (data) {
-      print('[Socket] joinConfession: $data');
-    });
-
     socket.on('commentAdded', (data) {
-      print('[Socket] Received comments: $data');
       if (!mounted) return;
-
       setState(() {
         if (data is Map) {
           String newId = data['_id'];
           bool alreadyExists = comments.any((c) => c['_id'] == newId);
           if (!alreadyExists) {
             Map<String, dynamic> newComment = Map<String, dynamic>.from(data);
-
-            if (newComment['quotedCommentId'] != null &&
-                newComment['quotedCommentId'] is String) {
-              final parentId = newComment['quotedCommentId'];
-              final parentComment = comments.firstWhere(
-                (c) => c['_id'] == parentId,
-                orElse: () => {},
-              );
-              if (parentComment.isNotEmpty) {
-                newComment['quotedCommentId'] = {
-                  "_id": parentId,
-                  "username": parentComment['username'] ?? 'Anonymous',
-                  "text": parentComment['text'] ?? '',
-                };
-              }
-            }
-
             comments.add(newComment);
           }
         }
@@ -146,10 +125,14 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
   }
 
   Future<void> postComment() async {
-    final text = _commentController.text.trim();
+    String text = _commentController.text.trim();
     if (text.isEmpty || userId.isEmpty) return;
 
     setState(() => isPosting = true);
+
+    if (quotedUsername != null && !text.startsWith('@$quotedUsername')) {
+      text = '@$quotedUsername $text';
+    }
 
     final url = Uri.parse('https://whisper-2nhg.onrender.com/api/comment/add');
     final body = {
@@ -171,28 +154,11 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
         final data = jsonDecode(response.body);
         final newComment = Map<String, dynamic>.from(data['comment']);
 
-        if (newComment['quotedCommentId'] != null &&
-            newComment['quotedCommentId'] is String) {
-          final parentId = newComment['quotedCommentId'];
-          final parentComment = comments.firstWhere(
-            (c) => c['_id'] == parentId,
-            orElse: () => {},
-          );
-          if (parentComment.isNotEmpty) {
-            newComment['quotedCommentId'] = {
-              "_id": parentId,
-              "username": parentComment['username'] ?? 'Anonymous',
-              "text": parentComment['text'] ?? '',
-            };
-          }
-        }
-
         socket.emit('sendComment', {
           ...newComment,
           'confessionId': widget.confessionId,
         });
 
-        // ✅ Trigger onNewComment callback to update comment count in ConfessionCard
         if (widget.onNewComment != null) {
           widget.onNewComment!();
         }
@@ -200,10 +166,11 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
         setState(() {
           _commentController.clear();
           quotedCommentId = null;
+          quotedUsername = null;
         });
       }
     } catch (e) {
-      // Handle error silently
+      // Handle silently
     } finally {
       setState(() => isPosting = false);
     }
@@ -226,22 +193,20 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     return '${duration.inDays}d ago';
   }
 
-  void handleQuickReplyTap(String text) {
-    _commentController.text = text;
-    _commentController.selection = TextSelection.fromPosition(
-      TextPosition(offset: text.length),
-    );
-  }
-
   Map<String, List<Map<String, dynamic>>> groupCommentsByParent() {
     Map<String, List<Map<String, dynamic>>> tree = {};
     for (var comment in comments) {
-      String parentId =
-          comment['quotedCommentId'] != null &&
-              comment['quotedCommentId'] is Map &&
-              comment['quotedCommentId']['_id'] != null
-          ? comment['quotedCommentId']['_id']
-          : 'root';
+      String parentId = 'root';
+
+      if (comment['quotedCommentId'] != null) {
+        if (comment['quotedCommentId'] is String) {
+          parentId = comment['quotedCommentId'];
+        } else if (comment['quotedCommentId'] is Map &&
+            comment['quotedCommentId']['_id'] != null) {
+          parentId = comment['quotedCommentId']['_id'];
+        }
+      }
+
       if (!tree.containsKey(parentId)) {
         tree[parentId] = [];
       }
@@ -260,24 +225,15 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     List<Widget> widgets = [];
     for (var comment in tree[parentId]!) {
       String id = comment['_id'];
-      String? quotedUsername;
-      if (comment['quotedCommentId'] != null &&
-          comment['quotedCommentId'] is Map &&
-          comment['quotedCommentId']['username'] != null) {
-        quotedUsername = comment['quotedCommentId']['username'];
-      }
 
       widgets.add(
-        Padding(
-          padding: EdgeInsets.only(left: indentLevel * 16.0),
-          child: _buildCommentItem(
-            context: context,
-            name: comment['username'] ?? 'Anonymous',
-            time: formatTimeAgo(comment['createdAt'] ?? ''),
-            text: comment['text'] ?? '',
-            commentId: id,
-            quotedUsername: quotedUsername,
-          ),
+        _buildCommentItem(
+          context: context,
+          name: comment['username'] ?? 'Anonymous',
+          time: formatTimeAgo(comment['createdAt'] ?? ''),
+          text: comment['text'] ?? '',
+          commentId: id,
+          indentLevel: indentLevel,
         ),
       );
 
@@ -303,23 +259,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           ),
         ),
         const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Text(
-                'Most relevant',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Icon(Icons.arrow_drop_down),
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Divider(thickness: 0.6, height: 1),
         Expanded(
           child: isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -330,32 +269,55 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
                     style: GoogleFonts.inter(fontSize: 14),
                   ),
                 )
-              : ListView(children: buildCommentTree(commentTree, 'root', 0)),
+              : ListView(
+                  children: buildCommentTree(commentTree, 'root', 0),
+                  padding: EdgeInsets.zero,
+                ),
         ),
-        const Divider(thickness: 0.6, height: 1),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
+        if (quotedUsername != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            alignment: Alignment.centerLeft,
             child: Row(
               children: [
-                _buildQuickReplyChip('Love this take'),
-                _buildQuickReplyChip('Thanks for sharing'),
+                Expanded(
+                  child: RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Replying to ',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        TextSpan(
+                          text: '@$quotedUsername',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 16),
+                  onPressed: () {
+                    setState(() {
+                      quotedCommentId = null;
+                      quotedUsername = null;
+                    });
+                  },
+                ),
               ],
             ),
           ),
-        ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             children: [
-              const CircleAvatar(
-                radius: 18,
-                backgroundImage: NetworkImage(
-                  'https://i.pravatar.cc/150?u=user',
-                ),
-              ),
-              const SizedBox(width: 8),
               Expanded(
                 child: TextField(
                   controller: _commentController,
@@ -391,131 +353,148 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     );
   }
 
-  Widget _buildQuickReplyChip(String label) {
-    return GestureDetector(
-      onTap: () => handleQuickReplyTap(label),
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(25),
-          border: Border.all(color: Colors.grey[300]!, width: 1),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.inter(fontSize: 14, color: Colors.black87),
-        ),
-      ),
-    );
-  }
-
   Widget _buildCommentItem({
     required BuildContext context,
     required String name,
     required String time,
     required String text,
     required String commentId,
-    String? quotedUsername,
+    int indentLevel = 0,
   }) {
-    String cleanText = text;
-    if (quotedUsername != null &&
-        quotedUsername.isNotEmpty &&
-        text.startsWith('@$quotedUsername')) {
-      cleanText = text.substring(quotedUsername.length + 1).trim();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      child: Column(
+    return IntrinsicHeight(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                radius: 18,
-                backgroundImage: NetworkImage(
-                  'https://i.pravatar.cc/150?u=user',
-                ),
+          if (indentLevel > 0)
+            Container(
+              width: 16,
+              alignment: Alignment.topCenter,
+              child: Column(
+                children: [
+                  Expanded(child: Container(width: 2, color: Colors.grey[300])),
+                  Container(width: 12, height: 2, color: Colors.grey[300]),
+                ],
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+            ),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16 + indentLevel * 8.0, 8, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 18,
+                        backgroundImage: NetworkImage(
+                          'https://i.pravatar.cc/150?u=user',
+                        ),
                       ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      time,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              time,
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  _buildCommentText(text),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        quotedCommentId = commentId;
+                        quotedUsername = name;
+                        _commentController.text = '@$name ';
+                        _commentController
+                            .selection = TextSelection.fromPosition(
+                          TextPosition(offset: _commentController.text.length),
+                        );
+                      });
+                    },
+                    child: Text(
+                      'Reply',
                       style: GoogleFonts.inter(
-                        fontSize: 10,
+                        fontSize: 12,
                         color: Colors.grey[600],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.more_vert, color: Colors.grey),
-            ],
-          ),
-          const SizedBox(height: 4),
-          if (quotedUsername != null && quotedUsername.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 48, bottom: 4),
-              child: Text(
-                '@$quotedUsername',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: Colors.blue,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.only(left: 48),
-            child: Text(cleanText, style: GoogleFonts.inter(fontSize: 14)),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 48, top: 4),
-            child: Row(
-              children: [
-                Text(
-                  'Like',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: Colors.grey[600],
                   ),
-                ),
-                const SizedBox(width: 16),
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      quotedCommentId = commentId;
-                      _commentController.text = '@$name ';
-                      _commentController.selection = TextSelection.fromPosition(
-                        TextPosition(offset: _commentController.text.length),
-                      );
-                    });
-                    print('Replying to commentId: $commentId by $name');
-                  },
-                  child: Text(
-                    'Reply',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCommentText(String text) {
+    final mentionRegex = RegExp(r'(@\w+)');
+    final spans = <TextSpan>[];
+
+    int lastMatchEnd = 0;
+
+    final matches = mentionRegex.allMatches(text);
+
+    if (matches.isEmpty) {
+      // No mention, render entire text normally
+      spans.add(TextSpan(text: text, style: GoogleFonts.inter(fontSize: 14)));
+    } else {
+      for (final match in matches) {
+        if (match.start > lastMatchEnd) {
+          // Add normal text before mention
+          spans.add(
+            TextSpan(
+              text: text.substring(lastMatchEnd, match.start),
+              style: GoogleFonts.inter(fontSize: 14),
+            ),
+          );
+        }
+
+        // Add mention with blue color
+        spans.add(
+          TextSpan(
+            text: match.group(0),
+            style: GoogleFonts.inter(fontSize: 14, color: Colors.blue),
+          ),
+        );
+
+        lastMatchEnd = match.end;
+      }
+
+      // Add remaining text after last mention
+      if (lastMatchEnd < text.length) {
+        spans.add(
+          TextSpan(
+            text: text.substring(lastMatchEnd),
+            style: GoogleFonts.inter(fontSize: 14),
+          ),
+        );
+      }
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: GoogleFonts.inter(fontSize: 14, color: Colors.black),
+        children: spans,
       ),
     );
   }
