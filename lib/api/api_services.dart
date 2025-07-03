@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:whispr_app/models/confession_model.dart';
+import 'package:whispr_app/screens/post_confesion_screen.dart';
 
 class ApiServices {
   final String baseUrl = 'https://whisper-2nhg.onrender.com/api';
@@ -31,13 +32,31 @@ class ApiServices {
     }
   }
 
+  Future<List<Category>> fetchCategories() async {
+    final url = Uri.parse(
+      'https://whisper-2nhg.onrender.com/api/confession-categories',
+    );
+
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final List data = json.decode(response.body);
+      return [
+        Category(id: 'all', name: 'All'),
+        ...data.map((e) => Category.fromJson(e)).toList(),
+      ];
+    } else {
+      throw Exception('Failed to load categories');
+    }
+  }
+
   /// Get all confessions for a user
   Future<List<Confession>> getAllConfession(String userId) async {
     final url = Uri.parse('$baseUrl/confessions?userId=$userId');
 
     try {
       final response = await http.get(url);
-      // print('🔗 Get All Confessions Response: ${response.body}');
+      print('🔗 Get All Confessions Response: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

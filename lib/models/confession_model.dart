@@ -2,19 +2,20 @@ class Confession {
   final String id;
   final String text;
   final String address;
-  final String category;
+  final String categoryId;
+  final String categoryName;
   final int upvotes;
   final int commentsCount;
   final String timestamp;
   final String username;
-  final Map<String, int>
-  reactions; // ✅ updated to non-nullable with empty map default
+  final Map<String, int> reactions;
 
   Confession({
     required this.id,
     required this.text,
     required this.address,
-    required this.category,
+    required this.categoryId,
+    required this.categoryName,
     required this.upvotes,
     required this.commentsCount,
     required this.timestamp,
@@ -23,23 +24,40 @@ class Confession {
   });
 
   factory Confession.fromJson(Map<String, dynamic> json) {
+    // Handle categoryId as object or string (API vs WebSocket)
+    String parsedCategoryId = '';
+    String parsedCategoryName = '';
+
+    if (json['categoryId'] is Map) {
+      parsedCategoryId = json['categoryId']['_id'] ?? '';
+      parsedCategoryName = json['categoryId']['name'] ?? '';
+    } else if (json['categoryId'] is String) {
+      parsedCategoryId = json['categoryId'];
+      parsedCategoryName = ''; // WebSocket event has no name field
+    }
+
+    // Handle authorId as object or string (API vs WebSocket)
+    String parsedUsername = 'Anonymous';
+    if (json['authorId'] is Map) {
+      parsedUsername = json['authorId']['randomUsername'] ?? 'Anonymous';
+    } else if (json['authorId'] is String) {
+      parsedUsername =
+          'Anonymous'; // WebSocket event sends only ID, no username
+    }
+
     return Confession(
       id: json['_id'] ?? '',
       text: json['text'] ?? '',
       address: json['address'] ?? '',
-      category: json['categoryId'] != null && json['categoryId']['name'] != null
-          ? json['categoryId']['name']
-          : '',
+      categoryId: parsedCategoryId,
+      categoryName: parsedCategoryName,
       upvotes: json['upvotes'] ?? 0,
       commentsCount: json['commentsCount'] ?? 0,
       timestamp: json['createdAt'] ?? '',
-      username:
-          json['authorId'] != null && json['authorId']['randomUsername'] != null
-          ? json['authorId']['randomUsername']
-          : 'Anonymous',
+      username: parsedUsername,
       reactions: json['reactions'] != null
           ? Map<String, int>.from(json['reactions'])
-          : {}, // ✅ parse reactions safely as Map<String, int>
+          : {},
     );
   }
 }
