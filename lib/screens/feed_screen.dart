@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
@@ -6,43 +7,46 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:whispr_app/api/api_services.dart';
 import 'package:whispr_app/helper/format_timestamp.dart';
 import 'package:whispr_app/models/confession_model.dart';
+import 'package:whispr_app/provider/socket_provider.dart';
 import 'package:whispr_app/screens/post_confesion_screen.dart';
 import 'package:whispr_app/widgets/confession_card.dart';
 
-class FeedScreen extends StatefulWidget {
+class FeedScreen extends ConsumerStatefulWidget {
   final List<Category> categories;
 
   const FeedScreen({super.key, required this.categories});
 
   @override
-  State<FeedScreen> createState() => FeedScreenState();
+  ConsumerState<FeedScreen> createState() => FeedScreenState();
 }
 
-class FeedScreenState extends State<FeedScreen> {
+class FeedScreenState extends ConsumerState<FeedScreen> {
   int selectedTabIndex = 0;
   List<Confession> confessions = [];
   String userId = '';
 
-  late IO.Socket socket;
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _initialize();
-    _connectSocket();
   }
 
   @override
   void dispose() {
-    socket.dispose();
+    final socket = ref.read(socketProvider);
+    socket.off('newConfession'); // clean up listener
     super.dispose();
   }
 
   Future<void> _initialize() async {
     print('🚀 Initializing FeedScreen...');
     await _loadUserId();
-    await fetchConfessions(); // Initial load for 'All'
+    await fetchConfessions();
+
+    final socket = ref.read(socketProvider);
+    _setupSocketListeners(socket);
   }
 
   Future<void> _loadUserId() async {
@@ -81,63 +85,41 @@ class FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  void _connectSocket() {
-    print('🌐 Connecting to WebSocket...');
-    socket = IO.io(
-      'https://whisper-2nhg.onrender.com',
-      IO.OptionBuilder()
-          .setTransports(['websocket'])
-          .disableAutoConnect()
-          .build(),
-    );
-
-    socket.connect();
-
+  void _setupSocketListeners(IO.Socket socket) {
+    print('Inside Socket--------');
     socket.onConnect((_) {
-      print('✅ Connected to WebSocket');
-
       final initialCategoryId = widget.categories[selectedTabIndex].id;
       if (initialCategoryId != 'all') {
         socket.emit('joinConfessionCategory', {
           'categoryId': initialCategoryId,
         });
-        print('👉 Joined category: $initialCategoryId');
       }
     });
 
-    socket.on('newConfession', (data) {
-      print('🆕 New Confession Received raw: $data');
-
+    socket.on('confessionAdded', (data) {
+      print('Confession Data---------------');
+      print(data);
       try {
         final newConfession = Confession.fromJson(data);
-
         final currentCategoryId = widget.categories[selectedTabIndex].id;
+
         if (currentCategoryId == 'all' ||
             newConfession.categoryId == currentCategoryId) {
-          setState(() {
-            confessions.insert(0, newConfession);
-          });
+          setState(() => confessions.insert(0, newConfession));
         }
       } catch (e) {
         print('❌ Error parsing new confession: $e');
       }
     });
-
-    socket.onDisconnect((_) => print('❌ Socket disconnected'));
-    socket.onError((err) => print('⚠️ Socket error: $err'));
   }
 
   void _onTabSelected(int index) async {
+    final socket = ref.read(socketProvider);
+
     final prevCategoryId = widget.categories[selectedTabIndex].id;
     final newCategoryId = widget.categories[index].id;
 
-    print(
-      '🔁 Switching tab from category $prevCategoryId to category $newCategoryId',
-    );
-
-    setState(() {
-      selectedTabIndex = index;
-    });
+    setState(() => selectedTabIndex = index);
 
     if (prevCategoryId != 'all') {
       socket.emit('leaveConfessionCategory', {'categoryId': prevCategoryId});
@@ -145,7 +127,6 @@ class FeedScreenState extends State<FeedScreen> {
 
     if (newCategoryId != 'all') {
       socket.emit('joinConfessionCategory', {'categoryId': newCategoryId});
-      print('👉 Joined category: $newCategoryId');
     }
 
     await fetchConfessions(categoryId: newCategoryId);

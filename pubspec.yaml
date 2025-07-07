@@ -24,6 +24,7 @@ dependencies:
   intl: ^0.20.2
   flutter_launcher_icons: ^0.14.4
   socket_io_client: ^3.1.2
+  flutter_riverpod: ^2.6.1
 
 dev_dependencies:
   flutter_test:

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:whispr_app/api/api_services.dart';
 import 'package:whispr_app/screens/home_screen.dart';
@@ -7,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  runApp(const WhisprApp());
+  runApp(ProviderScope(child: WhisprApp()));
 }
 
 class WhisprApp extends StatefulWidget {
