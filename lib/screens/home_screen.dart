@@ -39,7 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
       future: _categoriesFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          // Loading spinner while fetching categories
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
@@ -51,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final categories = snapshot.data ?? [];
 
           final List<Widget> _screens = [
-            FeedScreen(categories: categories), // Pass categories to FeedScreen
+            FeedScreen(categories: categories),
             const MapScreen(),
             PostConfessionScreen(
               onPostSuccess: () {

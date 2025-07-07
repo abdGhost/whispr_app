@@ -333,7 +333,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
                   );
                 }),
                 _buildActionIcon(Icons.share_outlined, 'Share', () {}),
-                _buildActionIcon(Icons.send_outlined, 'Send', () {}),
+                _buildActionIcon(Icons.send_outlined, 'Repost', () {}),
               ],
             ),
           ),

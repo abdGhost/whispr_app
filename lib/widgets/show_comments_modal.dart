@@ -105,7 +105,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
   Future<void> fetchComments() async {
     setState(() => isLoading = true);
     final url = Uri.parse(
-      'https://whisper-2nhg.onrender.com/api/comment/confession/${widget.confessionId}',
+      'https://whisper-2nhg.onrender.com/api/comment/confession/${widget.confessionId}?page=1&size=30',
     );
 
     try {
