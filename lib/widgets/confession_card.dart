@@ -17,6 +17,8 @@ class ConfessionCard extends StatefulWidget {
   final Map<String, int>? reactionCounts;
   final bool isReact;
 
+  final String categoryId;
+
   final bool isNew;
 
   const ConfessionCard({
@@ -32,6 +34,7 @@ class ConfessionCard extends StatefulWidget {
     this.reactionCounts,
     this.isReact = false,
     this.isNew = false,
+    required this.categoryId,
   });
 
   @override
@@ -62,11 +65,12 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
   Future<void> _submitReaction(String emoji) async {
     final url = Uri.parse(
-      'https://whisper-2nhg.onrender.com/api/comment/react',
+      'https://whisper-2nhg.onrender.com/api/confessions/react',
     );
 
     final body = {
-      'commentId': widget.confessionId,
+      'categoryId': widget.categoryId,
+      'confessionId': widget.confessionId,
       'userId': widget.userId,
       'emoji': emoji,
     };
@@ -78,22 +82,20 @@ class _ConfessionCardState extends State<ConfessionCard> {
         body: jsonEncode(body),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        setState(() {
-          if (userReaction != null &&
-              currentReactions.containsKey(userReaction!)) {
-            currentReactions[userReaction!] =
-                currentReactions[userReaction!]! - 1;
-            if (currentReactions[userReaction!] == 0) {
-              currentReactions.remove(userReaction!);
-            }
-          }
+      print(response.body);
 
-          if (emoji == '') {
-            userReaction = null;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData = jsonDecode(response.body);
+        final updatedReaction = responseData['reaction'];
+
+        setState(() {
+          currentReactions.clear();
+
+          if (updatedReaction != null && updatedReaction['emoji'] != null) {
+            currentReactions[updatedReaction['emoji']] = 1;
+            userReaction = updatedReaction['emoji'];
           } else {
-            currentReactions.update(emoji, (v) => v + 1, ifAbsent: () => 1);
-            userReaction = emoji;
+            userReaction = null;
           }
         });
       }
@@ -109,7 +111,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
   void _likeConfession() async {
     if (userReaction == null) {
-      await _submitReaction('👍');
+      await _submitReaction('');
     } else {
       await _submitReaction('');
     }

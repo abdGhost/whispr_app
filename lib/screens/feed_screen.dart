@@ -239,6 +239,7 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
                           confessionId: c.id,
                           userId: userId,
                           isReact: c.isReact,
+                          categoryId: c.categoryId,
                           isNew: newConfessionIds.contains(
                             c.id,
                           ), // ✅ pass isNew
