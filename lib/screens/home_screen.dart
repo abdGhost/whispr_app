@@ -43,6 +43,8 @@ class _HomeScreenState extends State<HomeScreen> {
             body: Center(child: CircularProgressIndicator()),
           );
         } else if (snapshot.hasError) {
+          print(snapshot.error);
+
           return Scaffold(
             body: Center(child: Text('Error: ${snapshot.error}')),
           );

@@ -27,6 +27,8 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
 
   bool isLoading = true;
 
+  Set<String> newConfessionIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -36,7 +38,7 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
   @override
   void dispose() {
     final socket = ref.read(socketProvider);
-    socket.off('newConfession'); // clean up listener
+    socket.off('confessionAdded'); // clean up listener
     super.dispose();
   }
 
@@ -89,28 +91,55 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
     print('Inside Socket--------');
     socket.onConnect((_) {
       final initialCategoryId = widget.categories[selectedTabIndex].id;
+      print(initialCategoryId);
+
       if (initialCategoryId != 'all') {
         socket.emit('joinConfessionCategory', {
           'categoryId': initialCategoryId,
         });
+      } else {
+        print('🟢 Connected to ALL tab, no join needed');
       }
     });
 
     socket.on('confessionAdded', (data) {
       print('Confession Data---------------');
-      print(data);
-      try {
-        final newConfession = Confession.fromJson(data);
-        final currentCategoryId = widget.categories[selectedTabIndex].id;
-
-        if (currentCategoryId == 'all' ||
-            newConfession.categoryId == currentCategoryId) {
-          setState(() => confessions.insert(0, newConfession));
-        }
-      } catch (e) {
-        print('❌ Error parsing new confession: $e');
-      }
+      _handleNewConfession(data, source: 'confessionAdded');
     });
+
+    socket.on('newConfession', (data) {
+      print('🔥 Received newConfession event: $data');
+      _handleNewConfession(data, source: 'newConfession');
+    });
+  }
+
+  void _handleNewConfession(dynamic data, {required String source}) {
+    try {
+      final newConfession = Confession.fromJson(data);
+      final currentCategoryId = widget.categories[selectedTabIndex].id;
+
+      if (source == 'newConfession' && currentCategoryId != 'all') {
+        return;
+      }
+
+      if (currentCategoryId == 'all' ||
+          newConfession.categoryId == currentCategoryId) {
+        setState(() {
+          confessions.insert(0, newConfession);
+          newConfessionIds.add(newConfession.id);
+        });
+
+        Future.delayed(Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              newConfessionIds.remove(newConfession.id);
+            });
+          }
+        });
+      }
+    } catch (e) {
+      print('❌ Error parsing new confession: $e');
+    }
   }
 
   void _onTabSelected(int index) async {
@@ -209,7 +238,10 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
                           reactionCounts: c.reactions,
                           confessionId: c.id,
                           userId: userId,
-                          isReact: c.isReact, // ✅ pass isReact safely
+                          isReact: c.isReact,
+                          isNew: newConfessionIds.contains(
+                            c.id,
+                          ), // ✅ pass isNew
                         ),
                       );
                     },

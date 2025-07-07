@@ -33,20 +33,26 @@ class ApiServices {
   }
 
   Future<List<Category>> fetchCategories() async {
-    final url = Uri.parse(
-      'https://whisper-2nhg.onrender.com/api/confession-categories',
-    );
+    final url = Uri.parse('$baseUrl/confession-categories');
 
-    final response = await http.get(url);
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
 
-    if (response.statusCode == 200) {
-      final List data = json.decode(response.body);
-      return [
-        Category(id: 'all', name: 'All'),
-        ...data.map((e) => Category.fromJson(e)).toList(),
-      ];
-    } else {
-      throw Exception('Failed to load categories');
+      if (response.statusCode == 200) {
+        final List data = json.decode(response.body);
+        return [
+          Category(id: 'all', name: 'All'),
+          ...data.map((e) => Category.fromJson(e)).toList(),
+        ];
+      } else {
+        print(
+          '❌ fetchCategories failed: ${response.statusCode} ${response.body}',
+        );
+        throw Exception('Failed to load categories');
+      }
+    } on Exception catch (e) {
+      print('⚠️ Exception in fetchCategories: $e');
+      rethrow;
     }
   }
 

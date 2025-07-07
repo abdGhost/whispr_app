@@ -17,6 +17,8 @@ class ConfessionCard extends StatefulWidget {
   final Map<String, int>? reactionCounts;
   final bool isReact;
 
+  final bool isNew;
+
   const ConfessionCard({
     super.key,
     required this.confessionId,
@@ -29,6 +31,7 @@ class ConfessionCard extends StatefulWidget {
     required this.comments,
     this.reactionCounts,
     this.isReact = false,
+    this.isNew = false,
   });
 
   @override
@@ -197,13 +200,14 @@ class _ConfessionCardState extends State<ConfessionCard> {
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: widget.isNew
+            ? Color(0xFF6C5CE7).withAlpha((255 * 0.5).toInt())
+            : Colors.white,
         borderRadius: BorderRadius.circular(0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
