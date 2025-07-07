@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-
 import 'package:whispr_app/api/api_services.dart';
+
 import 'package:whispr_app/helper/format_timestamp.dart';
 import 'package:whispr_app/models/confession_model.dart';
 import 'package:whispr_app/provider/socket_provider.dart';
@@ -88,7 +88,6 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
   }
 
   void _setupSocketListeners(IO.Socket socket) {
-    print('Inside Socket--------');
     socket.onConnect((_) {
       final initialCategoryId = widget.categories[selectedTabIndex].id;
       print(initialCategoryId);
@@ -111,6 +110,101 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
       print('🔥 Received newConfession event: $data');
       _handleNewConfession(data, source: 'newConfession');
     });
+
+    // socket.on('confessionReactionUpdated', (data) {
+    //   print('Inside Confession----------------');
+    //   print(data);
+    //   _updateConfessionReaction(data);
+    // });
+
+    // socket.on('broadcastConfessionReactionUpdated', (data) {
+    //   print('Inside here broadcast----------------');
+    //   print(data);
+    //   _updateConfessionReaction(data);
+    // });
+
+    socket.on('confessionReactionUpdated', (data) {
+      print('Inside Confession----------------');
+      print(data);
+
+      if (data['userId'] == userId) {
+        print('Skipping own confessionReactionUpdated to avoid duplicate');
+        return;
+      }
+
+      _updateConfessionReaction(data);
+    });
+
+    socket.on('broadcastConfessionReactionUpdated', (data) {
+      print('Inside here broadcast----------------');
+      print(data);
+
+      final currentCategoryId = widget.categories[selectedTabIndex].id;
+
+      if (currentCategoryId != 'all') {
+        print(
+          'Skipping broadcastConfessionReactionUpdated because inside category tab: $currentCategoryId',
+        );
+        return;
+      }
+
+      _updateConfessionReaction(data);
+    });
+  }
+
+  void _updateConfessionReaction(dynamic data) {
+    final confessionId = data['confessionId'];
+    final emoji = data['emoji'];
+    final oldEmoji = data['oldEmoji'];
+    final action = data['action'];
+
+    final index = confessions.indexWhere((c) => c.id == confessionId);
+    if (index != -1) {
+      setState(() {
+        final confession = confessions[index];
+
+        if (action == 'UPDATED') {
+          // Remove old emoji count
+          if (oldEmoji != null && oldEmoji.isNotEmpty) {
+            confession.reactions.update(
+              oldEmoji,
+              (value) => (value - 1).clamp(0, double.infinity).toInt(),
+              ifAbsent: () => 0,
+            );
+          }
+
+          // Add new emoji count
+          if (emoji != null && emoji.isNotEmpty) {
+            confession.reactions.update(
+              emoji,
+              (value) => value + 1,
+              ifAbsent: () => 1,
+            );
+          }
+        } else if (action == 'ADDED') {
+          // Simply increment emoji count
+          if (emoji != null && emoji.isNotEmpty) {
+            confession.reactions.update(
+              emoji,
+              (value) => value + 1,
+              ifAbsent: () => 1,
+            );
+          }
+        } else if (action == 'REMOVED') {
+          // Decrement emoji count
+          if (emoji != null && emoji.isNotEmpty) {
+            confession.reactions.update(
+              emoji,
+              (value) => (value - 1).clamp(0, double.infinity).toInt(),
+              ifAbsent: () => 0,
+            );
+          }
+        }
+
+        // ✅ Replace with new map to trigger rebuild
+        confession.reactions = Map<String, int>.from(confession.reactions);
+      });
+    }
   }
 
   void _handleNewConfession(dynamic data, {required String source}) {

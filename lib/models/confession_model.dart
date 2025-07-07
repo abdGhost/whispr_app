@@ -8,8 +8,8 @@ class Confession {
   final int commentsCount;
   final String timestamp;
   final String username;
-  final Map<String, int> reactions;
-  final bool isReact; // 🔧 NEW FIELD
+  Map<String, int> reactions;
+  bool isReact; // 🔧 NEW FIELD
 
   Confession({
     required this.id,

@@ -16,9 +16,7 @@ class ConfessionCard extends StatefulWidget {
   final int comments;
   final Map<String, int>? reactionCounts;
   final bool isReact;
-
   final String categoryId;
-
   final bool isNew;
 
   const ConfessionCard({
@@ -51,6 +49,10 @@ class _ConfessionCardState extends State<ConfessionCard> {
   @override
   void initState() {
     super.initState();
+    _initializeState();
+  }
+
+  void _initializeState() {
     currentReactions = Map<String, int>.from(widget.reactionCounts ?? {});
     commentsCount = widget.comments;
 
@@ -59,6 +61,16 @@ class _ConfessionCardState extends State<ConfessionCard> {
         if (count > 0 && userReaction == null) {
           userReaction = emoji;
         }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ConfessionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reactionCounts != oldWidget.reactionCounts) {
+      setState(() {
+        currentReactions = Map<String, int>.from(widget.reactionCounts ?? {});
       });
     }
   }
@@ -90,7 +102,6 @@ class _ConfessionCardState extends State<ConfessionCard> {
 
         setState(() {
           currentReactions.clear();
-
           if (updatedReaction != null && updatedReaction['emoji'] != null) {
             currentReactions[updatedReaction['emoji']] = 1;
             userReaction = updatedReaction['emoji'];
@@ -110,11 +121,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
   }
 
   void _likeConfession() async {
-    if (userReaction == null) {
-      await _submitReaction('');
-    } else {
-      await _submitReaction('');
-    }
+    await _submitReaction('');
   }
 
   void _showReactionOverlay(BuildContext context) {
@@ -170,10 +177,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
     );
 
     overlay.insert(_overlayEntry!);
-
-    Future.delayed(const Duration(seconds: 3), () {
-      _removeOverlay();
-    });
+    Future.delayed(const Duration(seconds: 3), _removeOverlay);
   }
 
   void _removeOverlay() {
@@ -210,85 +214,39 @@ class _ConfessionCardState extends State<ConfessionCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundImage: NetworkImage(
-                    'https://i.pravatar.cc/150?u=${widget.username}',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.username,
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${widget.timeAgo} • ${widget.location}',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.more_vert, color: Colors.grey),
-              ],
+          _buildHeader(),
+          _buildConfessionText(),
+          _buildReactionsAndComments(reactionEmojis),
+          const Divider(thickness: 0.4),
+          _buildActionBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundImage: NetworkImage(
+              'https://i.pravatar.cc/150?u=${widget.username}',
             ),
           ),
-          // Confession text
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              widget.confession,
-              style: GoogleFonts.inter(fontSize: 14, color: Colors.black87),
-            ),
-          ),
-          // Reactions and comments row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (reactionEmojis.isNotEmpty)
-                  Wrap(
-                    spacing: 12,
-                    children: reactionEmojis.map((emoji) {
-                      int count = currentReactions[emoji] ?? 0;
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(emoji, style: const TextStyle(fontSize: 16)),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$count',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: Colors.grey[800],
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
-                  )
-                else
-                  Text(
-                    'No reactions yet',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                const Spacer(),
                 Text(
-                  '$commentsCount comments',
+                  widget.username,
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${widget.timeAgo} • ${widget.location}',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: Colors.grey[600],
@@ -297,52 +255,103 @@ class _ConfessionCardState extends State<ConfessionCard> {
               ],
             ),
           ),
-          const Divider(thickness: 0.4),
-          // Action bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          const Icon(Icons.more_vert, color: Colors.grey),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConfessionText() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Text(
+        widget.confession,
+        style: GoogleFonts.inter(fontSize: 14, color: Colors.black87),
+      ),
+    );
+  }
+
+  Widget _buildReactionsAndComments(List<String> reactionEmojis) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          if (reactionEmojis.isNotEmpty)
+            Wrap(
+              spacing: 12,
+              children: reactionEmojis.map((emoji) {
+                int count = currentReactions[emoji] ?? 0;
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(emoji, style: const TextStyle(fontSize: 16)),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$count',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            )
+          else
+            Text(
+              'No reactions yet',
+              style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[800]),
+            ),
+          const Spacer(),
+          Text(
+            '$commentsCount comments',
+            style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          InkWell(
+            onTap: _likeConfession,
+            onLongPress: () => _showReactionOverlay(context),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                InkWell(
-                  onTap: _likeConfession,
-                  onLongPress: () => _showReactionOverlay(context),
-                  child: Row(
-                    children: [
-                      Icon(
-                        userReaction != null
-                            ? Icons.thumb_up_alt
-                            : Icons.thumb_up_alt_outlined,
-                        size: 20,
-                        color: userReaction != null
-                            ? Colors.blue
-                            : Colors.grey[800],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Like',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: userReaction != null
-                              ? Colors.blue
-                              : Colors.grey[800],
-                        ),
-                      ),
-                    ],
+                Icon(
+                  userReaction != null
+                      ? Icons.thumb_up_alt
+                      : Icons.thumb_up_alt_outlined,
+                  size: 20,
+                  color: userReaction != null ? Colors.blue : Colors.grey[800],
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Like',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: userReaction != null
+                        ? Colors.blue
+                        : Colors.grey[800],
                   ),
                 ),
-                _buildActionIcon(Icons.chat_bubble_outline, 'Comment', () {
-                  showCommentsModal(
-                    context,
-                    widget.confessionId,
-                    onNewComment: _incrementCommentsCount,
-                  );
-                }),
-                _buildActionIcon(Icons.share_outlined, 'Share', () {}),
-                _buildActionIcon(Icons.send_outlined, 'Repost', () {}),
               ],
             ),
           ),
+          _buildActionIcon(Icons.chat_bubble_outline, 'Comment', () {
+            showCommentsModal(
+              context,
+              widget.confessionId,
+              onNewComment: _incrementCommentsCount,
+            );
+          }),
+          _buildActionIcon(Icons.share_outlined, 'Share', () {}),
+          _buildActionIcon(Icons.send_outlined, 'Repost', () {}),
         ],
       ),
     );
