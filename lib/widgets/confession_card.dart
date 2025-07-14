@@ -152,7 +152,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
-                children: ['👍', '👏', '🤝', '❤️', '💡', '😂'].map((emoji) {
+                children: ['👏', '🤝', '❤️', '💡', '😂'].map((emoji) {
                   return GestureDetector(
                     onTap: () => _reactConfession(emoji),
                     child: Padding(
@@ -304,7 +304,7 @@ class _ConfessionCardState extends State<ConfessionCard> {
             ),
           const Spacer(),
           Text(
-            '$commentsCount comments',
+            commentsCount > 0 ? "$commentsCount comments" : "No comments yet",
             style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600]),
           ),
         ],

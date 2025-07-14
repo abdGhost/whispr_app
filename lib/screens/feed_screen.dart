@@ -111,18 +111,6 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
       _handleNewConfession(data, source: 'newConfession');
     });
 
-    // socket.on('confessionReactionUpdated', (data) {
-    //   print('Inside Confession----------------');
-    //   print(data);
-    //   _updateConfessionReaction(data);
-    // });
-
-    // socket.on('broadcastConfessionReactionUpdated', (data) {
-    //   print('Inside here broadcast----------------');
-    //   print(data);
-    //   _updateConfessionReaction(data);
-    // });
-
     socket.on('confessionReactionUpdated', (data) {
       print('Inside Confession----------------');
       print(data);
@@ -149,6 +137,10 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
       }
 
       _updateConfessionReaction(data);
+    });
+
+    socket.on('confessionCommentAdded', (data) {
+      print('Confession Comment Added--------------- $data');
     });
   }
 
