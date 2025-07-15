@@ -96,7 +96,6 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           if (!alreadyExists) {
             Map<String, dynamic> newComment = Map<String, dynamic>.from(data);
 
-            // ✅ Normalize quotedCommentId to String or null
             final quoted = newComment['quotedCommentId'];
             if (quoted is Map && quoted['_id'] != null) {
               newComment['quotedCommentId'] = quoted['_id']; // flatten
@@ -109,7 +108,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
             if (isTopLevel) {
               comments.insert(0, newComment);
             } else {
-              comments.add(newComment); // let tree builder position it
+              comments.add(newComment);
             }
           }
         }
