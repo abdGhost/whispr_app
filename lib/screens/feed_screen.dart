@@ -139,8 +139,22 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
       _updateConfessionReaction(data);
     });
 
+    // Working on this Socket
     socket.on('confessionCommentAdded', (data) {
       print('Confession Comment Added--------------- $data');
+      print('Hererererrererererererre');
+      final confessionId = data['confessionId'];
+      final action = data['action'];
+
+      if (action == 'ADDED') {
+        final index = confessions.indexWhere((c) => c.id == confessionId);
+        if (index != -1) {
+          setState(() {
+            confessions[index].commentsCount += 1;
+            confessions = List.from(confessions);
+          });
+        }
+      }
     });
   }
 

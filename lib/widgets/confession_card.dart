@@ -68,9 +68,18 @@ class _ConfessionCardState extends State<ConfessionCard> {
   @override
   void didUpdateWidget(covariant ConfessionCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Sync reactions if changed
     if (widget.reactionCounts != oldWidget.reactionCounts) {
       setState(() {
         currentReactions = Map<String, int>.from(widget.reactionCounts ?? {});
+      });
+    }
+
+    // ✅ Sync comments count if it changes from parent
+    if (widget.comments != oldWidget.comments) {
+      setState(() {
+        commentsCount = widget.comments;
       });
     }
   }

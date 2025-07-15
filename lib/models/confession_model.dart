@@ -5,7 +5,7 @@ class Confession {
   final String categoryId;
   final String categoryName;
   final int upvotes;
-  final int commentsCount;
+  int commentsCount;
   final String timestamp;
   final String username;
   Map<String, int> reactions;
