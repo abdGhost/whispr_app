@@ -6,6 +6,7 @@ import 'package:whispr_app/screens/feed_screen.dart';
 import 'package:whispr_app/screens/map_screen.dart';
 import 'package:whispr_app/screens/notification_screen.dart';
 import 'package:whispr_app/screens/post_confesion_screen.dart';
+import 'package:whispr_app/theme/app_colors.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -52,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
         } else {
           final categories = snapshot.data ?? [];
 
-          final List<Widget> _screens = [
+          final List<Widget> screens = [
             FeedScreen(categories: categories),
             const MapScreen(),
             PostConfessionScreen(
@@ -74,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               centerTitle: true,
             ),
-            body: IndexedStack(index: _selectedIndex, children: _screens),
+            body: IndexedStack(index: _selectedIndex, children: screens),
             bottomNavigationBar: SalomonBottomBar(
               currentIndex: _selectedIndex,
               onTap: (index) {
@@ -82,37 +83,37 @@ class _HomeScreenState extends State<HomeScreen> {
                   _selectedIndex = index;
                 });
               },
-              selectedItemColor: const Color(0xFF6C5CE7),
-              unselectedItemColor: Colors.grey,
+              selectedItemColor: AppColors.primaryColor,
+              unselectedItemColor: AppColors.grey,
               items: [
                 SalomonBottomBarItem(
                   icon: const Icon(Icons.home_filled),
                   title: Container(),
-                  selectedColor: const Color(0xFF6C5CE7),
+                  selectedColor: AppColors.primaryColor,
                 ),
                 SalomonBottomBarItem(
                   icon: const Icon(Icons.map_outlined),
                   title: Container(),
-                  selectedColor: const Color(0xFF6C5CE7),
+                  selectedColor: AppColors.primaryColor,
                 ),
                 SalomonBottomBarItem(
                   icon: const Icon(
                     Icons.add_circle,
                     size: 36,
-                    color: Color(0xFFFF6B81),
+                    color: AppColors.secondaryPink,
                   ),
                   title: Container(),
-                  selectedColor: const Color(0xFFFF6B81),
+                  selectedColor: AppColors.secondaryPink,
                 ),
                 SalomonBottomBarItem(
                   icon: const Icon(Icons.notifications),
                   title: Container(),
-                  selectedColor: const Color(0xFF6C5CE7),
+                  selectedColor: AppColors.primaryColor,
                 ),
                 SalomonBottomBarItem(
                   icon: const Icon(Icons.person),
                   title: Container(),
-                  selectedColor: const Color(0xFF6C5CE7),
+                  selectedColor: AppColors.primaryColor,
                 ),
               ],
             ),
