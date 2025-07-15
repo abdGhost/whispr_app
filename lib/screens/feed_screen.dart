@@ -9,6 +9,7 @@ import 'package:whispr_app/helper/format_timestamp.dart';
 import 'package:whispr_app/models/confession_model.dart';
 import 'package:whispr_app/provider/socket_provider.dart';
 import 'package:whispr_app/screens/post_confesion_screen.dart';
+import 'package:whispr_app/theme/app_colors.dart';
 import 'package:whispr_app/widgets/confession_card.dart';
 
 class FeedScreen extends ConsumerStatefulWidget {
@@ -264,7 +265,7 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.grey[100],
+      color: AppColors.backgroundGrey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -287,14 +288,12 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFF6C5CE7)
-                          : Colors.white,
+                      color: isSelected ? AppColors.primaryColor : Colors.white,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isSelected
-                            ? const Color(0xFF6C5CE7)
-                            : Colors.grey[300]!,
+                            ? AppColors.primaryColor
+                            : AppColors.tabBorderGrey,
                       ),
                     ),
                     child: Text(
@@ -302,7 +301,7 @@ class FeedScreenState extends ConsumerState<FeedScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: isSelected ? Colors.white : Colors.black,
+                        color: isSelected ? AppColors.white : AppColors.black,
                       ),
                     ),
                   ),
