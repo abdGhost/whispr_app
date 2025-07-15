@@ -80,11 +80,13 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     socket.connect();
 
     socket.onConnect((_) {
-      print('✅ Connected to socket server');
-      socket.emit('joinConfession', widget.confessionId);
+      print('✅ Connected to socket server ${widget.confessionId}');
+
+      socket.emit('joinConfession', {'confessionId': widget.confessionId});
     });
 
     socket.on('commentAdded', (data) {
+      print('Comment Added by USER--------- $data');
       if (!mounted) return;
       setState(() {
         if (data is Map) {
@@ -92,7 +94,17 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           bool alreadyExists = comments.any((c) => c['_id'] == newId);
           if (!alreadyExists) {
             Map<String, dynamic> newComment = Map<String, dynamic>.from(data);
-            comments.add(newComment);
+
+            // ✅ If it's a top-level comment (not a reply), insert at top
+            if (newComment['quotedCommentId'] == null ||
+                (newComment['quotedCommentId'] is String &&
+                    newComment['quotedCommentId'].toString().isEmpty)) {
+              comments.insert(0, newComment);
+            } else {
+              comments.add(
+                newComment,
+              ); // Let replies be handled via comment tree
+            }
           }
         }
         isLoading = false;
@@ -153,6 +165,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final newComment = Map<String, dynamic>.from(data['comment']);
+        print(newComment);
 
         socket.emit('sendComment', {
           ...newComment,
