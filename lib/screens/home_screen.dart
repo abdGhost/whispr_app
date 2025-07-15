@@ -4,6 +4,7 @@ import 'package:salomon_bottom_bar/salomon_bottom_bar.dart';
 import 'package:whispr_app/api/api_services.dart';
 import 'package:whispr_app/screens/feed_screen.dart';
 import 'package:whispr_app/screens/map_screen.dart';
+import 'package:whispr_app/screens/notification_screen.dart';
 import 'package:whispr_app/screens/post_confesion_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -61,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
               },
             ),
-            const NotificationsScreen(),
+            const NotificationScreen(),
             const ProfileScreen(),
           ];
 
@@ -118,21 +119,6 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
       },
-    );
-  }
-}
-
-// Dummy NotificationsScreen & ProfileScreen for completeness
-class NotificationsScreen extends StatelessWidget {
-  const NotificationsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        'No notifications yet.',
-        style: GoogleFonts.inter(fontSize: 16, color: Colors.grey),
-      ),
     );
   }
 }
