@@ -88,6 +88,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     socket.on('commentAdded', (data) {
       print('Comment Added by USER--------- $data');
       if (!mounted) return;
+
       setState(() {
         if (data is Map) {
           String newId = data['_id'];
@@ -95,15 +96,20 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           if (!alreadyExists) {
             Map<String, dynamic> newComment = Map<String, dynamic>.from(data);
 
-            // ✅ If it's a top-level comment (not a reply), insert at top
-            if (newComment['quotedCommentId'] == null ||
-                (newComment['quotedCommentId'] is String &&
-                    newComment['quotedCommentId'].toString().isEmpty)) {
+            // ✅ Normalize quotedCommentId to String or null
+            final quoted = newComment['quotedCommentId'];
+            if (quoted is Map && quoted['_id'] != null) {
+              newComment['quotedCommentId'] = quoted['_id']; // flatten
+            }
+
+            final isTopLevel =
+                newComment['quotedCommentId'] == null ||
+                newComment['quotedCommentId'].toString().isEmpty;
+
+            if (isTopLevel) {
               comments.insert(0, newComment);
             } else {
-              comments.add(
-                newComment,
-              ); // Let replies be handled via comment tree
+              comments.add(newComment); // let tree builder position it
             }
           }
         }
@@ -247,6 +253,9 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           text: comment['text'] ?? '',
           commentId: id,
           indentLevel: indentLevel,
+          quotedUsername: comment['quotedCommentId'] is Map
+              ? comment['quotedCommentId']['username']
+              : null,
         ),
       );
 
@@ -373,6 +382,7 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     required String text,
     required String commentId,
     int indentLevel = 0,
+    String? quotedUsername,
   }) {
     return IntrinsicHeight(
       child: Row(
@@ -428,7 +438,10 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  _buildCommentText(text),
+                  _buildCommentText(
+                    text,
+                    quotedUsername: quotedUsername,
+                  ), // ✅ FIXED HERE
                   const SizedBox(height: 4),
                   GestureDetector(
                     onTap: () {
@@ -459,21 +472,22 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
     );
   }
 
-  Widget _buildCommentText(String text) {
+  Widget _buildCommentText(String text, {String? quotedUsername}) {
+    if (quotedUsername != null && !text.startsWith('@$quotedUsername')) {
+      text = '@$quotedUsername $text';
+    }
+
     final mentionRegex = RegExp(r'(@\w+)');
     final spans = <TextSpan>[];
 
     int lastMatchEnd = 0;
-
     final matches = mentionRegex.allMatches(text);
 
     if (matches.isEmpty) {
-      // No mention, render entire text normally
       spans.add(TextSpan(text: text, style: GoogleFonts.inter(fontSize: 14)));
     } else {
       for (final match in matches) {
         if (match.start > lastMatchEnd) {
-          // Add normal text before mention
           spans.add(
             TextSpan(
               text: text.substring(lastMatchEnd, match.start),
@@ -482,18 +496,16 @@ class _CommentsModalContentState extends State<CommentsModalContent> {
           );
         }
 
-        // Add mention with blue color
         spans.add(
           TextSpan(
             text: match.group(0),
-            style: GoogleFonts.inter(fontSize: 14, color: Colors.blue),
+            style: GoogleFonts.inter(fontSize: 12, color: Colors.blue),
           ),
         );
 
         lastMatchEnd = match.end;
       }
 
-      // Add remaining text after last mention
       if (lastMatchEnd < text.length) {
         spans.add(
           TextSpan(
